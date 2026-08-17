@@ -12,16 +12,12 @@ The project then carries that estimate through to a business decision — nettin
 
 Audience is a hiring manager reading the README for 60 seconds and a technical interviewer reading the code for 30 minutes. Optimise for both.
 
-## Status
-
-Complete and working. 25 tests pass (23 fast + 2 slow full-data integration). Not yet deployed or pushed with a real commit history — see Outstanding.
-
 ## Commands
 
 ```bash
 make data        # regenerate synthetic dataset (data/raw/ is gitignored)
 make analysis    # full pipeline, ~4 min at --boot 200
-make test        # 23 fast tests
+make test        # 25 fast tests
 make test-all    # + 2 slow full-data integration tests
 make app         # streamlit run app/main.py
 make explain     # smoke-test the LLM stakeholder layer
@@ -40,7 +36,7 @@ src/economics.py       contribution margin -> targeting decision
 src/run_analysis.py    orchestrates everything, writes results/, scores vs truth
 src/explain.py         LLM stakeholder layer + 3 guardrails
 app/main.py            Streamlit demo (5 tabs)
-tests/test_pipeline.py 25 tests
+tests/test_pipeline.py 27 tests
 ```
 
 ## Invariants — do not break these
@@ -58,6 +54,8 @@ These are the load-bearing design decisions. Each has a test guarding it; if a c
 5. **The stress test is not a formal bound.** It is not a Rosenbaum bound or E-value, and gamma is not calibrated to real-world confounding strength. Language anywhere in the repo must say "stress test," never "sensitivity analysis" in the formal sense.
 
 6. **Causal language is hedged.** "The estimated causal effect is $X under conditional exchangeability, positivity, and SUTVA" — not "the promo caused $X." The synthetic truth is reported separately and labelled as such.
+
+**Schema stability:** the dataset and answer key produced by `src/generate_data.py` are consumed by a separate downstream project that benchmarks against these planted effects. Treat the output schema and the generator as a published interface — changing either breaks that consumer. The isolation rules for `data/ground_truth/` are specified in `data/ground_truth/README.md`.
 
 ## Known gotchas
 
@@ -85,31 +83,3 @@ Balance: worst \|SMD\| 0.660 → 0.007 (logistic), 0.042 (cross-fitted GBM). CI 
 Segment contribution: low +$0.98 [+0.60, +1.14], mid −$0.04 [−0.32, +0.28], high −$2.31 [−2.89, −1.72].
 
 Low-spend net sits ~6ppm from a rounding boundary (true value $0.9750058); a ±0.01 drift across library versions is expected, not a regression.
-
-## Outstanding work
-
-In priority order:
-
-1. **Commit history.** The repo arrived fully formed in one session. Rebuild-as-you-commit, or at minimum commit in 6–8 logical batches (data → cleaning → estimators → diagnostics → economics → LLM layer → tests → docs). A single "initial commit" of a finished project reads as copied.
-2. **Deploy to Hugging Face Spaces.** Needs a 3-line `app.py` shim at repo root (Spaces looks for that filename) and YAML frontmatter at the top of README.md (`sdk: streamlit`, `app_file: app.py`).
-3. **Put the live URL in the README** (under the title) and in the GitHub repo's About field. The README currently implies a demo that doesn't exist yet.
-4. **Verify from a fresh clone** — `make test` in a temp folder catches packaging gaps.
-5. **Blog post** — angle it at the finding, not the method. Working title: *"A Naive Analysis Said Our Promo Made $23 Per Customer. It Made $6."* The CI under-coverage result is the most shareable part.
-
-## Nice-to-haves (not blocking)
-
-- E-value (VanderWeele & Ding) as a formal complement to the stress test
-- 5-fold cross-fitting instead of 2-fold (lower variance, higher cost)
-- Structured output for the LLM layer: a Pydantic schema whose `causal_claims` list is validated field-by-field before prose renders — the principled version of the regex guardrails
-- Difference-in-differences design on a pre/post panel, which would identify the effect under weaker assumptions
-
-## Portfolio context
-
-This is the **first of four** projects in a ~13-week plan. Sequence: this one (weeks 1–2) → RAG system with DSPy + custom benchmark (3–5) → MCP-connected analytics agent (6–8) → fine-tuning vs RAG study (9–11) → portfolio assembly (12–13).
-
-**The dataset here is reused by the analytics agent project.** That agent will be asked "why did revenue growth slow last quarter?" against this same database and benchmarked against the planted effects. Two consequences:
-
-- Keep the schema and generator stable; breaking changes cost work later.
-- `data/ground_truth/` **must be excluded from the agent's environment**. If the agent can read the answer key, its benchmark is worthless. See `data/ground_truth/README.md` for the contract.
-
-The strongest planned write-up compares the rigorous causal estimate here against what the agent concludes autonomously — wherever the agent overclaims is the interesting result.
