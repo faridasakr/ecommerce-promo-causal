@@ -1,16 +1,6 @@
----
-title: Did Free Shipping Actually Work?
-emoji: 📦
-colorFrom: blue
-colorTo: gray
-sdk: streamlit
-sdk_version: 1.50.0
-app_file: app.py
-pinned: false
-license: mit
----
-
 # Did Free Shipping Actually Work?
+
+**[▶ Live demo](https://ecommerce-promo-causal-k8unq4zcnx7cspfo3ru8f4.streamlit.app)**
 
 **A causal study of an e-commerce promotion — where the obvious analysis overstates the effect by 3.6×, and where the profitable answer is the opposite of what revenue alone suggests.**
 

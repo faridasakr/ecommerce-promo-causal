@@ -10,8 +10,6 @@ The headline result: a naive difference in means says the promo drove **$23.03**
 
 The project then carries that estimate through to a business decision — netting revenue against gross margin and shipping subsidy — which **flips the ranking**: profitable for low-spend customers, loss-making for high-spend, statistically unresolvable for mid-spend.
 
-Audience is a hiring manager reading the README for 60 seconds and a technical interviewer reading the code for 30 minutes. Optimise for both.
-
 ## Commands
 
 ```bash
