@@ -24,17 +24,23 @@ The causal CIs are propagated through the margin arithmetic rather than discarde
 
 ## The estimate behind it
 
-| Estimator | Target estimand | Estimate | 95% CI | True value | Error |
-|---|---|---:|---:|---:|---:|
-| Naive difference in means | ATE | $23.03 | [22.40, 23.57] | $5.87 | **+293%** |
-| OLS regression adjustment | ATE | $7.09 | [6.60, 7.73] | $5.87 | +21% |
-| Propensity score matching | **ATT** | $7.08 | [5.32, 7.76] | **$5.98** | +18% |
-| IPW (stabilised) | ATE | $6.38 | [5.68, 7.27] | $5.87 | +9% |
-| **AIPW (cross-fitted, doubly robust)** | ATE | **$6.42** | [5.98, 7.16] | $5.87 | +9% |
+| Estimator | Target estimand | Target population | Estimate | 95% CI | True value | Error |
+|---|---|---|---:|---:|---:|---:|
+| Naive difference in means | ATE | full sample | $23.03 | [22.40, 23.57] | — | — |
+| OLS regression adjustment | ATE | full sample | $7.09 | [6.60, 7.73] | $5.87 | +21% |
+| Propensity score matching | **ATT** | **matched treated** | $7.08 | [5.32, 7.76] | **$5.98** | +18% |
+| IPW (stabilised) | ATE | trimmed (logistic) | $6.38 | [5.68, 7.27] | $5.87 | +9% |
+| **AIPW (cross-fitted, doubly robust)** | ATE | trimmed (cross-fit) | **$6.42** | [5.98, 7.16] | $5.87 | +9% |
 
 The **estimated causal effect** is **$6.42 per customer** (95% CI $5.98–$7.16), under conditional exchangeability, positivity, and SUTVA. Because this is synthetic data, the planted truth is known to be **$5.87** — on real data that column would not exist, which is precisely why the diagnostics and stated assumptions carry the weight.
 
-**On the estimand column:** propensity score matching targets the ATT — the effect among customers who *actually used* the promo — and is scored against the true ATT ($5.98), not the ATE ($5.87). Under this DGP they happen to be close, but that is a property of this data, not a licence to conflate them. A policy question about extending the promo to everyone needs the ATE; a question about whether it paid off for the people who took it needs the ATT.
+**On the naive row:** it has no true value because it is not estimating one. A difference between two self-selected groups is a description of who opted in, not an attempt at a causal quantity. Scoring it against the ATE would imply it was aiming at the ATE and missing, when the honest statement is that it targets nothing causal at all. Its $23.03 is still the number most analyses would report, which is the point of showing it.
+
+**On the two right-hand columns:** trimming and matching change *what is being estimated*, not just how well. Each estimator is therefore scored against the mean individual treatment effect over the units it actually used — the full sample for OLS, the trimmed sample for IPW and AIPW (which trim different units, because they use different propensity models), and the matched treated units for PSM. Those truths are computed from the per-customer effects at scoring time rather than hard-coded, so the target follows the estimator instead of the estimator being graded against someone else's population.
+
+The correction turns out to be small here: the four targets are $5.867, $5.980, $5.869, and $5.868, so they round to the same cents and the Error column barely moves. That is a fact about this DGP — the trimmed units happen to have near-average effects — not a general result, and it is only visible *because* the targets are computed separately. PSM's is the substantive gap: its ATT refers to **18,664 matched treated customers**, not all 50,000 and not even all 18,671 treated.
+
+A policy question about extending the promo to everyone needs the ATE; a question about whether it paid off for the people who took it needs the ATT. They are close under this DGP, but that is a property of this data, not a licence to conflate them.
 
 ---
 
@@ -44,7 +50,7 @@ The **estimated causal effect** is **$6.42 per customer** (95% CI $5.98–$7.16)
 
 That is not a bug. Bootstrap intervals quantify *sampling variability*: how much the estimate would move if you redrew the sample. They say nothing about *model misspecification* — systematic bias from a propensity model that doesn't capture the true assignment mechanism. So a tight interval around a slightly biased estimate is exactly what you should expect, and exactly what a stakeholder will misread as precision.
 
-Only 2 of 5 intervals contain their target. Any analysis that reports a CI as though it bounds total error is making this mistake.
+Only 2 of the 4 intervals with a causal target contain it. Any analysis that reports a CI as though it bounds total error is making this mistake.
 
 ---
 
@@ -148,7 +154,7 @@ Estimation error
 ├── selection bias, unadjusted            +$17.17  (naive estimator)
 ├── residual bias after adjustment         +$0.51 to +$1.22
 │   └── driven by unmodelled effect heterogeneity in the propensity model
-├── CI under-coverage                       3 of 5 intervals exclude their target
+├── CI under-coverage                       2 of 4 scored intervals exclude their target
 │   └── incl. AIPW: 9% point error, yet its CI misses
 │   └── bootstrap CIs capture sampling noise, not model bias  ← see "the lesson"
 └── estimand drift from trimming            0.24% of sample

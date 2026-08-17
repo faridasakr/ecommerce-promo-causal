@@ -86,18 +86,38 @@ def psm_matching(X, t, y, caliper: float = 0.02, seed: int = 0, **kw) -> float:
     reweights the sample to the treated covariate distribution, so the target
     quantity changes.
 
-    It is scored against `true_att` from the answer key, not `true_ate`. Under
-    this DGP they happen to be close ($5.98 vs $5.87), but "close" is a property
-    of this data-generating process, not a licence to conflate them. A policy
-    question about extending the promo to everyone needs the ATE; a question
-    about whether the promo paid off for the people who used it needs the ATT.
+    It is scored against the mean individual effect over the units it actually
+    matched -- see `psm_matched_treated` -- not against a full-population
+    number. Trimming and the caliper drop treated units that found no
+    counterpart, so the ATT here refers to the matched treated, not to every
+    treated customer.
+
+    A policy question about extending the promo to everyone needs the ATE; a
+    question about whether it paid off for the people who used it needs the ATT.
+    """
+    parts = _psm_components(X, t, y, caliper=caliper, seed=seed)
+    if parts is None:
+        return np.nan
+    treated_y, matched_control, _ = parts
+    return float(treated_y.mean() - matched_control.mean())
+
+
+def _psm_components(X, t, y, caliper: float = 0.02, seed: int = 0):
+    """Shared matching step behind `psm_matching` and `psm_matched_treated`.
+
+    Returns (treated_y, matched_control_y, matched_treated_index) where the
+    index is positional into the ORIGINAL arrays, or None if nothing matched.
+    Keeping this in one place means the units the estimate is computed over and
+    the units it is scored against can never drift apart.
     """
     ps = fit_propensity(X, t, seed=seed)
     keep = trim_common_support(ps, t)
-    ps, t_, y_ = ps[keep], t[keep], y[keep]
+    kept_index = np.flatnonzero(keep)
+    ps_, t_, y_ = ps[keep], t[keep], y[keep]
 
-    treated_ps = ps[t_ == 1].reshape(-1, 1)
-    control_ps = ps[t_ == 0].reshape(-1, 1)
+    treated_local = np.flatnonzero(t_ == 1)
+    treated_ps = ps_[treated_local].reshape(-1, 1)
+    control_ps = ps_[t_ == 0].reshape(-1, 1)
     control_y = y_[t_ == 0]
 
     nn = NearestNeighbors(n_neighbors=1).fit(control_ps)
@@ -105,10 +125,47 @@ def psm_matching(X, t, y, caliper: float = 0.02, seed: int = 0, **kw) -> float:
 
     within = dist.ravel() <= caliper
     if within.sum() == 0:
-        return np.nan
+        return None
     matched_control = control_y[idx.ravel()[within]]
-    treated_y = y_[t_ == 1][within]
-    return float(treated_y.mean() - matched_control.mean())
+    treated_y = y_[treated_local][within]
+    matched_treated_index = kept_index[treated_local[within]]
+    return treated_y, matched_control, matched_treated_index
+
+
+# ---------------------------------------------------------------------------
+# Population masks -- which units each estimator actually used.
+#
+# Trimming and matching change the estimand: an estimator that drops units is
+# no longer targeting the full-population quantity. These masks let the scoring
+# step compute the truth over the same sub-population the estimator used,
+# instead of comparing every estimator to one hard-coded number.
+# ---------------------------------------------------------------------------
+def ipw_trim_mask(X, t, seed: int = 0) -> np.ndarray:
+    """Units IPW keeps: common support under the LOGISTIC propensity model."""
+    return trim_common_support(fit_propensity(X, t, seed=seed), t)
+
+
+def aipw_trim_mask(X, t, seed: int = 0, n_folds: int = 2) -> np.ndarray:
+    """Units AIPW keeps: common support under the CROSS-FITTED model.
+
+    A different propensity model trims a different set of units, so this is not
+    interchangeable with `ipw_trim_mask`.
+    """
+    ps = crossfit_propensity(X, t, seed=seed, n_folds=n_folds)
+    return trim_common_support(ps, t)
+
+
+def psm_matched_treated(X, t, y, caliper: float = 0.02, seed: int = 0) -> np.ndarray:
+    """Boolean mask over all rows: treated units that found a match in caliper.
+
+    This is the population PSM's ATT actually refers to -- not every treated
+    unit, only those retained after trimming and successfully matched.
+    """
+    mask = np.zeros(len(t), dtype=bool)
+    parts = _psm_components(X, t, y, caliper=caliper, seed=seed)
+    if parts is not None:
+        mask[parts[2]] = True
+    return mask
 
 
 def ipw(X, t, y, seed: int = 0, **kw) -> float:

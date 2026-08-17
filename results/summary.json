@@ -17,7 +17,7 @@
     "Positivity: every customer had a non-zero probability of both using and not using the promo (checked via overlap; trimmed where violated).",
     "SUTVA: one customer's promo use does not affect another's revenue."
   ],
-  "estimand_note": "Propensity score matching targets the ATT and is scored against the true ATT; all other estimators target the ATE.",
+  "estimand_note": "Each estimator is scored against the mean individual treatment effect over the units it actually used: the full sample for OLS, the trimmed sample for IPW and AIPW (which trim under different propensity models), and the matched treated units for PSM, which targets the ATT. The naive difference in means is a descriptive contrast between self-selected groups and has no causal target, so it is reported without a true value or bias.",
   "propensity_models": {
     "logistic": {
       "used_by": [

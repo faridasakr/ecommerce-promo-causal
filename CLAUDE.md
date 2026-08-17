@@ -45,6 +45,8 @@ These are the load-bearing design decisions. Each has a test guarding it; if a c
 
 2. **PSM targets the ATT, everything else targets the ATE**, and each is scored against its own true value. Never collapse these into one column. Guarded by `test_psm_targets_att_not_ate`.
 
+   Scoring goes further: each estimator is compared to the mean individual effect over *the units it actually used*, derived from its own mask (`ipw_trim_mask`, `aipw_trim_mask`, `psm_matched_treated`). Trimming and matching change the estimand, so a shared full-population target would grade estimators against a population they never estimated. `tau_individual.npy` must be joined on `customer_id` — the raw CSV is shuffled, and positional alignment fails silently.
+
 3. **The LLM never sees raw data** — only `results/summary.json`. Handed the raw table, a model reproduces the naive $23 figure, which is the exact error the project exists to prevent. Statistical reasoning stays in tested Python.
 
 4. **Two propensity models, diagnosed separately.** IPW/PSM use logistic; AIPW uses cross-fitted gradient boosting. Balance and overlap are reported per-model so a clean table from one cannot vouch for an estimate from the other. Balance is computed on the *trimmed* population, matching what the estimators actually use.
@@ -68,15 +70,17 @@ These are the load-bearing design decisions. Each has a test guarding it; if a c
 
 If a change moves these materially, investigate before accepting:
 
-| Estimator | Estimand | Estimate | True |
-|---|---|---:|---:|
-| Naive | ATE | 23.03 | 5.87 |
-| OLS | ATE | 7.09 | 5.87 |
-| PSM | ATT | 7.08 | 5.98 |
-| IPW | ATE | 6.38 | 5.87 |
-| AIPW | ATE | 6.42 | 5.87 |
+| Estimator | Estimand | Target population | n | Estimate | True |
+|---|---|---|---:|---:|---:|
+| Naive | ATE | full sample | 50,000 | 23.03 | — |
+| OLS | ATE | full sample | 50,000 | 7.09 | 5.867 |
+| PSM | ATT | matched treated | 18,664 | 7.08 | 5.980 |
+| IPW | ATE | trimmed (logistic) | 49,879 | 6.38 | 5.869 |
+| AIPW | ATE | trimmed (cross-fit) | 49,972 | 6.42 | 5.868 |
 
-Balance: worst \|SMD\| 0.660 → 0.007 (logistic), 0.042 (cross-fitted GBM). CI coverage: 2 of 5.
+Each truth is the mean of `tau_individual.npy` over the units that estimator used, computed at scoring time. Naive has no causal target and is reported with a dash. The four targets differ only in the third decimal under this DGP — that is a property of the planted effects, not a reason to collapse them back into one column.
+
+Balance: worst \|SMD\| 0.660 → 0.007 (logistic), 0.042 (cross-fitted GBM). CI coverage: 2 of 4 scored (naive excluded).
 
 Segment contribution: low +$0.98 [+0.60, +1.14], mid −$0.04 [−0.32, +0.28], high −$2.31 [−2.89, −1.72].
 

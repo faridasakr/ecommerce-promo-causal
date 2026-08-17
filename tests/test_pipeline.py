@@ -295,6 +295,11 @@ def _num(cell: str) -> float:
     return float(s)
 
 
+def _is_dash(cell: str) -> bool:
+    """True if the cell is an em/en dash or hyphen placeholder, not a number."""
+    return cell.replace("**", "").strip() in {"—", "–", "-", "--", "n/a"}
+
+
 def _pair(cell: str) -> tuple[float, float]:
     """Parse a '[low, high]' interval cell."""
     lo, hi = cell.strip().strip("[]").split(",")
@@ -362,11 +367,32 @@ def test_readme_estimator_table_matches_estimates(results_present):
             f"{name}: README estimand disagrees with the declared target -- "
             f"PSM targets the ATT and must not be collapsed into the ATE"
         )
-        assert abs(_num(cells[2]) - row["estimate"]) <= TOL, f"{name} estimate"
-        ci_low, ci_high = _pair(cells[3])
+        assert cells[2].replace("**", "").strip() == row["target_population"], (
+            f"{name}: README target population disagrees with the population the "
+            f"estimator actually used -- trimming and matching change the estimand"
+        )
+        assert abs(_num(cells[3]) - row["estimate"]) <= TOL, f"{name} estimate"
+        ci_low, ci_high = _pair(cells[4])
         assert abs(ci_low - row["ci_low"]) <= TOL, f"{name} CI low"
         assert abs(ci_high - row["ci_high"]) <= TOL, f"{name} CI high"
-        assert abs(_num(cells[4]) - row["true_value"]) <= TOL, f"{name} true value"
-        assert abs(_num(cells[5]) - row["abs_pct_error"]) <= PCT_TOL, f"{name} error pct"
+
+        # An estimator with no causal target must be shown with a dash, not a
+        # number. Printing a "true value" for the naive contrast would imply it
+        # was aiming at the ATE and missing.
+        if pd.isna(row["true_value"]):
+            assert _is_dash(cells[5]), (
+                f"{name} has no causal target in estimates.csv, so the README "
+                f"must show a dash for its true value, not {cells[5]!r}"
+            )
+            assert _is_dash(cells[6]), (
+                f"{name} has no causal target, so its error cell must be a dash"
+            )
+        else:
+            assert not _is_dash(cells[5]), (
+                f"{name} has a true value of {row['true_value']} in estimates.csv "
+                f"but the README shows a dash"
+            )
+            assert abs(_num(cells[5]) - row["true_value"]) <= TOL, f"{name} true value"
+            assert abs(_num(cells[6]) - row["abs_pct_error"]) <= PCT_TOL, f"{name} error pct"
 
     assert seen == set(est.index), f"README is missing estimators: {set(est.index) - seen}"

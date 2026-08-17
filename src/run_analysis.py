@@ -115,31 +115,76 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
 
     # -------------------------------------------- 7. score against ground truth
     print("\n[7/7] Scoring against held-out ground truth")
-    truth = json.load(open(ROOT / "data" / "ground_truth" / "answer_key.json"))
-    targets = {"ATE": truth["true_ate"], "ATT": truth["true_att"]}
+    truth_dir = ROOT / "data" / "ground_truth"
+    truth = json.load(open(truth_dir / "answer_key.json"))
+
+    # Individual effects, aligned by customer_id. add_realistic_mess() shuffles
+    # and duplicates rows before the CSV is written, so positional alignment
+    # would silently score every estimator against the wrong customers.
+    tau_by_generation_index = np.load(truth_dir / "tau_individual.npy")
+    tau = tau_by_generation_index[df["customer_id"].str[1:].astype(int).to_numpy()]
+
+    # The population each estimator actually used. Trimming and matching change
+    # the estimand, so each is scored over its own units rather than against one
+    # full-population number.
+    full = np.ones(len(t), dtype=bool)
+    masks = {
+        "OLS regression adjustment": full,
+        "IPW (stabilised)": estimators.ipw_trim_mask(X, t, seed=seed),
+        "AIPW (cross-fitted, doubly robust)": estimators.aipw_trim_mask(X, t, seed=seed),
+        "Propensity score matching": estimators.psm_matched_treated(X, t, y, seed=seed),
+    }
+    populations = {
+        "Naive difference in means": "full sample",
+        "OLS regression adjustment": "full sample",
+        "Propensity score matching": "matched treated",
+        "IPW (stabilised)": "trimmed (logistic)",
+        "AIPW (cross-fitted, doubly robust)": "trimmed (cross-fit)",
+    }
 
     rows = []
     for r in results:
-        target = targets[r.estimand]
-        covers = (
-            bool(r.ci_low <= target <= r.ci_high) if np.isfinite(r.ci_low) else None
-        )
+        # The naive difference in means is a descriptive contrast between two
+        # self-selected groups. It does not target a causal quantity, so there
+        # is no true value to score it against -- reporting one would imply it
+        # was trying and failing to estimate the ATE, rather than estimating
+        # something else entirely.
+        if r.name not in masks:
+            target = bias = pct = None
+            covers = None
+        else:
+            m = masks[r.name]
+            target = float(tau[m].mean())
+            bias = r.ate - target
+            pct = abs(bias) / abs(target) * 100
+            covers = (
+                bool(r.ci_low <= target <= r.ci_high)
+                if np.isfinite(r.ci_low)
+                else None
+            )
         rows.append(
             {
                 "estimator": r.name,
                 "target_estimand": r.estimand,
+                "target_population": populations[r.name],
+                "n_target": int(masks[r.name].sum()) if r.name in masks else len(t),
                 "estimate": round(r.ate, 3),
                 "ci_low": round(r.ci_low, 3),
                 "ci_high": round(r.ci_high, 3),
-                "true_value": round(target, 3),
-                "bias": round(r.ate - target, 3),
-                "abs_pct_error": round(abs(r.ate - target) / target * 100, 1),
+                "true_value": None if target is None else round(target, 3),
+                "bias": None if bias is None else round(bias, 3),
+                "abs_pct_error": None if pct is None else round(pct, 1),
                 "ci_covers_truth": covers,
             }
         )
     est_df = pd.DataFrame(rows)
     est_df.to_csv(RESULTS / "estimates.csv", index=False)
-    print(est_df.to_string(index=False))
+
+    display = est_df.copy()
+    for col in ("true_value", "bias", "abs_pct_error", "ci_covers_truth"):
+        # pd.isna, not `is None`: pandas coerces None to NaN in numeric columns.
+        display[col] = display[col].map(lambda v: "—" if pd.isna(v) else v)
+    print(display.to_string(index=False))
 
     headline = est_df[est_df["estimator"].str.startswith("AIPW")].iloc[0]
     naive = est_df.iloc[0]
@@ -166,8 +211,13 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
             "SUTVA: one customer's promo use does not affect another's revenue.",
         ],
         "estimand_note": (
-            "Propensity score matching targets the ATT and is scored against the "
-            "true ATT; all other estimators target the ATE."
+            "Each estimator is scored against the mean individual treatment "
+            "effect over the units it actually used: the full sample for OLS, "
+            "the trimmed sample for IPW and AIPW (which trim under different "
+            "propensity models), and the matched treated units for PSM, which "
+            "targets the ATT. The naive difference in means is a descriptive "
+            "contrast between self-selected groups and has no causal target, so "
+            "it is reported without a true value or bias."
         ),
         "propensity_models": {
             "logistic": {
@@ -200,7 +250,8 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
     with open(RESULTS / "summary.json", "w") as f:
         json.dump(summary, f, indent=2)
 
-    n_covering = est_df["ci_covers_truth"].sum()
+    scored = est_df[est_df["true_value"].notna()]
+    n_covering = int(scored["ci_covers_truth"].sum())
     print("\n" + "=" * 72)
     print(f"ESTIMATED CAUSAL EFFECT: ${headline['estimate']:.2f} per customer "
           f"(95% CI ${headline['ci_low']:.2f}-${headline['ci_high']:.2f})")
@@ -208,7 +259,8 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
     print(f"  naive analysis said ${naive['estimate']:.2f} "
           f"({summary['overstatement_factor']}x overstatement)")
     print(f"  planted truth (synthetic data): ${truth['true_ate']:.2f}")
-    print(f"  CI coverage: {n_covering}/{len(est_df)} intervals contain their target")
+    print(f"  CI coverage: {n_covering}/{len(scored)} intervals contain their target "
+          f"(naive excluded: no causal target)")
     print(f"\nDECISION: {rec['decision']}")
     print("=" * 72)
     print(f"\nArtefacts written to {RESULTS}/")

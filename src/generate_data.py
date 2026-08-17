@@ -151,7 +151,14 @@ def generate(n: int = N_CUSTOMERS, seed: int = SEED) -> tuple[pd.DataFrame, dict
     )
 
     # ------------------------------------------------------------------ ground truth
+    # Individual treatment effects. Persisting these is what lets the scoring
+    # step compute an estimand-specific truth for whatever sub-population an
+    # estimator actually used (trimmed, matched, ...) instead of comparing
+    # everything to a hard-coded full-population number.
+    tau = y1 - y0
+
     truth = {
+        "tau_individual": tau,
         "true_ate": float(np.mean(y1 - y0)),
         "true_att": float(np.mean((y1 - y0)[treated == 1])),
         "incidence_lift_pp": INCIDENCE_LIFT,
@@ -169,10 +176,20 @@ def generate(n: int = N_CUSTOMERS, seed: int = SEED) -> tuple[pd.DataFrame, dict
         "treated_share": float(treated.mean()),
         "n": int(n),
         "seed": seed,
+        "tau_individual_file": "tau_individual.npy",
+        "tau_alignment": (
+            "Row i of tau_individual.npy is the individual treatment effect "
+            "y1 - y0 for customer_id f'C{i:07d}'. add_realistic_mess() shuffles "
+            "and duplicates rows, so consumers MUST align on customer_id rather "
+            "than on row position."
+        ),
         "note": (
             "true_ate is computed directly from the full potential-outcome pairs "
             "(Y1, Y0) and is the number to score estimators against. It combines the "
-            "incidence lift and the basket lift, so it is not simply BASKET_LIFT."
+            "incidence lift and the basket lift, so it is not simply BASKET_LIFT. "
+            "true_ate and true_att are full-population and all-treated summaries; "
+            "for an estimator that trims or matches, take the mean of "
+            "tau_individual over the units it actually used."
         ),
     }
 
@@ -224,10 +241,17 @@ def main() -> None:
     messy = add_realistic_mess(clean)
 
     messy.to_csv(raw_dir / "customers.csv", index=False)
+
+    # The per-customer effects go to .npy: 50k floats would bloat the JSON and
+    # they are read as an array, never by eye.
+    tau = truth.pop("tau_individual")
+    np.save(truth_dir / "tau_individual.npy", tau)
+
     with open(truth_dir / "answer_key.json", "w") as f:
         json.dump(truth, f, indent=2)
 
     print(f"Wrote {len(messy):,} rows -> data/raw/customers.csv")
+    print(f"Wrote {len(tau):,} individual effects -> data/ground_truth/tau_individual.npy")
     print(f"True ATE (held out): ${truth['true_ate']:.2f}")
     print(f"Naive difference in means: ${truth['naive_diff_in_means']:.2f}")
     print(f"Selection bias: ${truth['naive_diff_in_means'] - truth['true_ate']:.2f}")

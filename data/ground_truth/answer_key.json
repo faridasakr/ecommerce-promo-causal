@@ -10,5 +10,7 @@
   "treated_share": 0.37342,
   "n": 50000,
   "seed": 20260816,
-  "note": "true_ate is computed directly from the full potential-outcome pairs (Y1, Y0) and is the number to score estimators against. It combines the incidence lift and the basket lift, so it is not simply BASKET_LIFT."
+  "tau_individual_file": "tau_individual.npy",
+  "tau_alignment": "Row i of tau_individual.npy is the individual treatment effect y1 - y0 for customer_id f'C{i:07d}'. add_realistic_mess() shuffles and duplicates rows, so consumers MUST align on customer_id rather than on row position.",
+  "note": "true_ate is computed directly from the full potential-outcome pairs (Y1, Y0) and is the number to score estimators against. It combines the incidence lift and the basket lift, so it is not simply BASKET_LIFT. true_ate and true_att are full-population and all-treated summaries; for an estimator that trims or matches, take the mean of tau_individual over the units it actually used."
 }

@@ -1,6 +1,6 @@
-estimator,target_estimand,estimate,ci_low,ci_high,true_value,bias,abs_pct_error,ci_covers_truth
-Naive difference in means,ATE,23.033,22.396,23.567,5.867,17.166,292.6,False
-OLS regression adjustment,ATE,7.086,6.6,7.725,5.867,1.218,20.8,False
-Propensity score matching,ATT,7.079,5.322,7.756,5.979,1.1,18.4,True
-IPW (stabilised),ATE,6.376,5.682,7.268,5.867,0.509,8.7,True
-"AIPW (cross-fitted, doubly robust)",ATE,6.415,5.981,7.164,5.867,0.548,9.3,False
+estimator,target_estimand,target_population,n_target,estimate,ci_low,ci_high,true_value,bias,abs_pct_error,ci_covers_truth
+Naive difference in means,ATE,full sample,50000,23.033,22.396,23.567,,,,
+OLS regression adjustment,ATE,full sample,50000,7.086,6.6,7.725,5.867,1.218,20.8,False
+Propensity score matching,ATT,matched treated,18664,7.079,5.322,7.756,5.98,1.099,18.4,True
+IPW (stabilised),ATE,trimmed (logistic),49879,6.376,5.682,7.268,5.869,0.507,8.6,True
+"AIPW (cross-fitted, doubly robust)",ATE,trimmed (cross-fit),49972,6.415,5.981,7.164,5.868,0.547,9.3,False
