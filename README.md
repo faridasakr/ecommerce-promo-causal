@@ -52,7 +52,7 @@ A policy question about extending the promo to everyone needs the ATE; a questio
 
 That is not a bug. Bootstrap intervals quantify *sampling variability*: how much the estimate would move if you redrew the sample. They say nothing about *model misspecification* — systematic bias from a propensity model that doesn't capture the true assignment mechanism. So a tight interval around a slightly biased estimate is exactly what you should expect, and exactly what a stakeholder will misread as precision.
 
-Only 1 of the 3 remaining intervals contains its target. Any analysis that reports a CI as though it bounds total error is making this mistake.
+In this run, 1 of the 3 intervals contained its target. That is what happened in this one sample — not a measured coverage rate. Calling it "under-coverage" would claim something about how the procedure behaves in repeated sampling, which a single realization cannot establish; that would take a simulation study over many replications. The mechanism above is the transferable part, and it holds regardless of what this particular draw did.
 
 ---
 
@@ -151,13 +151,15 @@ data/raw/customers.csv
 
 ## Error taxonomy
 
+In this realization, 2 of the 3 nominal 95% intervals did not contain their target. That is non-coverage in one sample, **not** an estimate of the procedure's coverage rate — establishing a rate would require a simulation study over many replications.
+
 ```
 Estimation error
 ├── selection bias, unadjusted            +$17.17  (naive estimator)
 ├── residual bias after adjustment         +$0.51 to +$1.22
 │   └── driven by unmodelled effect heterogeneity in the propensity model
-├── CI under-coverage                       2 of 3 scored intervals exclude their target
-│   └── incl. AIPW: 9% point error, yet its CI misses
+├── intervals missing their target          2 of 3 in this realization
+│   └── incl. AIPW: 9% point error, yet its interval misses
 │   └── bootstrap CIs capture sampling noise, not model bias  ← see "the lesson"
 └── estimand drift from trimming            0.24% of sample
 

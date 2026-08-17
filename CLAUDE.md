@@ -80,7 +80,9 @@ If a change moves these materially, investigate before accepting:
 
 Each truth is the mean of `tau_individual.npy` over the units that estimator used, computed at scoring time. Naive has no causal target and is reported with a dash. The four targets differ only in the third decimal under this DGP — that is a property of the planted effects, not a reason to collapse them back into one column.
 
-Balance: worst \|SMD\| 0.660 → 0.007 (logistic), 0.042 (cross-fitted GBM). CI coverage: 1 of 3 scored (naive has no causal target; PSM has no valid bootstrap interval).
+Balance: worst \|SMD\| 0.660 → 0.007 (logistic), 0.042 (cross-fitted GBM).
+
+Intervals containing their target: 1 of 3 in this realization (naive has no causal target; PSM has no valid bootstrap interval). Report this as a count for this sample, never as a coverage *rate* — a rate is a property of the procedure under repeated sampling and would need a simulation study. "Under-coverage" is the wrong word and must not reappear.
 
 Segment contribution: low +$0.98 [+0.60, +1.14], mid −$0.04 [−0.32, +0.28], high −$2.31 [−2.89, −1.72].
 

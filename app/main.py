@@ -79,17 +79,22 @@ with tab1:
     st.subheader("Every estimator, scored against the known truth")
     st.dataframe(estimates, width="stretch", hide_index=True)
     st.bar_chart(estimates.set_index("estimator")["estimate"])
-    n_cover = int(estimates["ci_covers_truth"].sum())
+    # Only rows with BOTH an interval and a causal target can be assessed:
+    # naive has no causal target, PSM has no valid bootstrap interval.
+    scored = estimates[estimates["true_value"].notna() & estimates["ci_low"].notna()]
+    n_cover = int(scored["ci_covers_truth"].sum())
     st.info(
         f"**Note the `target_estimand` column.** Propensity score matching targets "
         f"the ATT (effect among those who used the promo); everything else targets "
         f"the ATE. Each is scored against its own true value — comparing them as if "
         f"they estimated the same quantity would be a category error.\n\n"
-        f"Also: only {n_cover} of {len(estimates)} confidence intervals contain their "
-        f"target. Bootstrap CIs capture sampling variability, not model "
-        f"misspecification — a tight interval around a slightly biased estimate is "
-        f"exactly what you should expect, and exactly what a stakeholder would "
-        f"misread as precision."
+        f"Also: in this realization {n_cover} of {len(scored)} nominal 95% intervals "
+        f"contained their target. That is what happened in this one sample, not a "
+        f"measured coverage rate — establishing a rate would need a simulation study "
+        f"over many replications. The reason it can happen is that bootstrap CIs "
+        f"capture sampling variability, not model misspecification: a tight interval "
+        f"around a slightly biased estimate is exactly what you should expect, and "
+        f"exactly what a stakeholder would misread as precision."
     )
 
 with tab2:

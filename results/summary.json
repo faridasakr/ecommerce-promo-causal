@@ -160,5 +160,5 @@
   "stress_test_caveat": "Simulation-based stress test, not a Rosenbaum bound or E-value. gamma is not calibrated to a real-world confounding strength.",
   "true_ate_revealed": 5.86743499737903,
   "true_att_revealed": 5.978596579904368,
-  "ci_coverage_note": "Bootstrap CIs capture sampling variability only, not model misspecification. Some intervals exclude the true value despite small point-estimate error."
+  "ci_coverage_note": "Bootstrap CIs capture sampling variability only, not model misspecification. Some intervals exclude the true value despite small point-estimate error. Counts of intervals containing their target describe THIS realization only; they are not an estimate of the procedure's coverage rate, which would require a simulation study over many replications. Do not describe this as 'under-coverage' or quote it as a coverage percentage."
 }

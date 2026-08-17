@@ -248,14 +248,20 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
         "ci_coverage_note": (
             "Bootstrap CIs capture sampling variability only, not model "
             "misspecification. Some intervals exclude the true value despite "
-            "small point-estimate error."
+            "small point-estimate error. Counts of intervals containing their "
+            "target describe THIS realization only; they are not an estimate of "
+            "the procedure's coverage rate, which would require a simulation "
+            "study over many replications. Do not describe this as "
+            "'under-coverage' or quote it as a coverage percentage."
         ),
     }
     with open(RESULTS / "summary.json", "w") as f:
         json.dump(summary, f, indent=2)
 
-    # Coverage is only meaningful where an interval exists AND has a target to
-    # cover: naive has no causal target, PSM has no valid bootstrap interval.
+    # Only assessable where an interval exists AND has a target to contain:
+    # naive has no causal target, PSM has no valid bootstrap interval. This is a
+    # count for this one realization, not an estimate of a coverage RATE -- that
+    # is a property of the procedure and needs many replications to measure.
     scored = est_df[est_df["true_value"].notna() & est_df["ci_low"].notna()]
     n_covering = int(scored["ci_covers_truth"].sum())
     print("\n" + "=" * 72)
@@ -265,8 +271,9 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
     print(f"  naive analysis said ${naive['estimate']:.2f} "
           f"({summary['overstatement_factor']}x overstatement)")
     print(f"  planted truth (synthetic data): ${truth['true_ate']:.2f}")
-    print(f"  CI coverage: {n_covering}/{len(scored)} intervals contain their target "
-          f"(naive has no causal target; PSM has no valid bootstrap interval)")
+    print(f"  In this realization: {n_covering}/{len(scored)} intervals contained "
+          f"their target (not a coverage rate)")
+    print(f"    naive has no causal target; PSM has no valid bootstrap interval")
     print(f"\nDECISION: {rec['decision']}")
     print("=" * 72)
     print(f"\nArtefacts written to {RESULTS}/")
