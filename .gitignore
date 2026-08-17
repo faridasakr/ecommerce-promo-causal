@@ -8,6 +8,7 @@ venv/
 data/raw/*.csv
 results/*.png
 .DS_Store
+.claude/settings.local.json
 
 # NOTE: data/ground_truth/answer_key.json is deliberately NOT ignored.
 # It is committed so reviewers can verify the scoring themselves. The isolation
