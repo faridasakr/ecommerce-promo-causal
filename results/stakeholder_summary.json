@@ -41,24 +41,24 @@
       "n": 16662,
       "treated_share": 0.24096747089184972,
       "ate": 7.9804335666972985,
-      "ci_low": 7.137551981765785,
-      "ci_high": 8.337334598103883
+      "ci_low": 7.1227419967426755,
+      "ci_high": 8.616426200667595
     },
     {
       "segment": "mid spend",
       "n": 16670,
       "treated_share": 0.367006598680264,
       "ate": 7.1238781026418,
-      "ci_low": 6.514677254331175,
-      "ci_high": 7.835511320862428
+      "ci_low": 6.541825670406242,
+      "ci_high": 7.862362233325749
     },
     {
       "segment": "high spend",
       "n": 16668,
       "treated_share": 0.5122390208783297,
       "ate": 4.012418252069893,
-      "ci_low": 2.7278713095822757,
-      "ci_high": 5.3300663362673175
+      "ci_low": 2.9265912710025304,
+      "ci_high": 5.396068876001231
     }
   ],
   "economics": [
@@ -76,7 +76,7 @@
       "rate_confounding_gap": 0.048,
       "subsidy_if_observed_rate": -2.62,
       "net_contribution_low": 1.05,
-      "net_contribution_high": 1.43,
+      "net_contribution_high": 1.51,
       "ci_source": "joint bootstrap (revenue + incidence)",
       "sign_is_certain": true,
       "verdict": "evidence supports targeting"
@@ -94,8 +94,8 @@
       "observed_treated_rate": 0.5,
       "rate_confounding_gap": 0.046,
       "subsidy_if_observed_rate": -3.25,
-      "net_contribution_low": 0.06,
-      "net_contribution_high": 0.58,
+      "net_contribution_low": 0.03,
+      "net_contribution_high": 0.51,
       "ci_source": "joint bootstrap (revenue + incidence)",
       "sign_is_certain": true,
       "verdict": "evidence supports targeting"
@@ -113,8 +113,8 @@
       "observed_treated_rate": 0.633,
       "rate_confounding_gap": 0.034,
       "subsidy_if_observed_rate": -4.11,
-      "net_contribution_low": -2.37,
-      "net_contribution_high": -1.39,
+      "net_contribution_low": -2.49,
+      "net_contribution_high": -1.4,
       "ci_source": "joint bootstrap (revenue + incidence)",
       "sign_is_certain": true,
       "verdict": "evidence suggests this segment destroys contribution"

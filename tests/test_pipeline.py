@@ -425,6 +425,32 @@ def test_decision_string_covers_all_three_verdicts():
     )
 
 
+@pytest.mark.parametrize(
+    "n_boot,expected",
+    [
+        (20, 20),     # floor
+        (40, 20),     # dev: quarter count, floored
+        (80, 20),
+        (99, 24),     # still below threshold
+        (100, 100),   # threshold: full count
+        (200, 200),   # final artefacts
+        (500, 500),
+    ],
+)
+def test_segment_bootstrap_uses_full_count_for_final_runs(n_boot, expected):
+    """Segment intervals get the full replicate count at final-run sizes.
+
+    The verdict rule reads the 2.5th percentile of the contribution draws, and
+    that tail is what decides whether a segment reads as "evidence supports
+    targeting" or "economically uncertain". Estimating it from 50 draws makes
+    it roughly the second order statistic. Below BOOT=100 the quarter count is
+    kept so iteration stays fast.
+    """
+    import run_analysis
+
+    assert run_analysis.segment_boot(n_boot) == expected
+
+
 def test_economics_reports_breakeven_and_caveats():
     hte = pd.DataFrame({"segment": ["low spend"], "ate": [8.0], "ci_low": [7.2], "ci_high": [8.2]})
     econ = economics.segment_economics(hte, {"low spend": 0.40})

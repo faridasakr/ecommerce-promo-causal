@@ -14,7 +14,7 @@ The project then carries that estimate through to a business decision — nettin
 
 ```bash
 make data        # regenerate synthetic dataset (data/raw/ is gitignored)
-make analysis    # full pipeline, ~4 min at --boot 200
+make analysis    # full pipeline, ~40 min at --boot 200 (segments bootstrap at full count)
 make test        # 25 fast tests
 make test-all    # + 2 slow full-data integration tests
 make app         # streamlit run app/main.py
@@ -69,7 +69,7 @@ These are the load-bearing design decisions. Each has a test guarding it; if a c
 - **Nuisance learner choice matters for runtime:** `HistGradientBoostingRegressor` is ~7× faster than `GradientBoostingRegressor` here (1.1s vs 7.3s per AIPW fit) with slightly better accuracy. Bootstrapping is infeasible with the latter. Do not swap it back.
 - **`ast.get_docstring(node, clean=False)`** in the ground-truth test — the default dedents, so the returned text no longer equals the raw `ast.Constant` and the docstring filter misses.
 - **Numeric fidelity validator compares floats, not strings.** String comparison let `$6.40` match a true `6.42` (both render as "6.4" at 1dp). Match to the cent.
-- **Bootstrap is slow.** Use `--boot 40` while iterating; `--boot 200` only for final artefacts.
+- **Bootstrap is slow.** Use `--boot 40` while iterating (~2 min); `--boot 200` only for final artefacts (~40 min). Per-segment bootstraps run at the FULL count at or above BOOT=100 and a quarter count below it — see `run_analysis.segment_boot`. The segment tails drive the targeting verdict, so they are not the place to economise on replicates.
 
 ## Expected results (regression reference)
 
@@ -89,22 +89,22 @@ Balance: worst \|SMD\| 0.660 → 0.007 (logistic), 0.042 (cross-fitted GBM).
 
 Intervals containing their target: 1 of 3 in this realization (naive has no causal target; PSM has no valid bootstrap interval). Report this as a count for this sample, never as a coverage *rate* — a rate is a property of the procedure under repeated sampling and would need a simulation study. "Under-coverage" is the wrong word and must not reappear.
 
-Segment contribution: low +$1.29 [+1.05, +1.43], mid +$0.25 [+0.06, +0.58], high −$2.09 [−2.37, −1.39].
+Segment contribution: low +$1.29 [+1.05, +1.51], mid +$0.25 [+0.03, +0.51], high −$2.09 [−2.49, −1.40].
 
 The subsidy multiplier is the CAUSAL incidence P(purchase | do(T=1)) per segment (0.354 / 0.454 / 0.599), not the observed treated rate (0.402 / 0.500 / 0.633). The observed rate is confounded and runs 3-5pp high; using it reintroduces selection bias on the cost side. Both are reported in economics.csv.
 
 Contribution intervals come from a JOINT bootstrap: each replicate resamples a segment once and re-runs revenue ATE -> P(purchase | do(T=1)) -> net contribution, then percentiles are taken over the contribution draws. Never compose two separately-bootstrapped quantities.
 
-The two estimates correlate +0.88 / +0.58 / +0.34 (low/mid/high). Because contribution is a *difference* (margin x revenue - shipping x rate), that POSITIVE correlation cancels variance rather than adding it — so the correct interval is NARROWER, and the error from a shortcut scales with the correlation:
+The two estimates correlate +0.87 / +0.66 / +0.43 (low/mid/high). Because contribution is a *difference* (margin x revenue - shipping x rate), that POSITIVE correlation cancels variance rather than adding it — so the correct interval is NARROWER, and the error from a shortcut scales with the correlation:
 
 | Segment | corr | sd revenue-only | sd if independent | sd joint |
 |---|---:|---:|---:|---:|
-| low | +0.88 | 0.148 (+60%) | 0.164 (+77%) | 0.092 |
-| mid | +0.58 | 0.158 (+18%) | 0.167 (+25%) | 0.134 |
-| high | +0.34 | 0.295 (+4%) | 0.298 (+5%) | 0.284 |
+| low | +0.87 | 0.176 (+50%) | 0.191 (+63%) | 0.117 |
+| mid | +0.66 | 0.159 (+23%) | 0.168 (+29%) | 0.130 |
+| high | +0.43 | 0.303  (+6%) | 0.306  (+7%) | 0.287 |
 
 All four columns are in contribution_bootstrap.csv, so the correction is checkable rather than asserted. Do not assume adding a second uncertainty source widens an interval — for a difference with correlated terms it narrows.
 
 Targeting is INTERVAL-based, not point-estimate based: `economics.verdict_from_interval` maps CI lower>0 -> "evidence supports targeting", upper<0 -> "evidence suggests this segment destroys contribution", spans 0 -> "economically uncertain; recommend a controlled test". `recommendation()` keys off that verdict; the `profitable` boolean is a point-estimate fact that is still reported but no longer drives the decision. The three strings are emitted VERBATIM in the README table, the app's decision tab, and summary.json — a test fails if the README paraphrases them.
 
-All three segments currently have sign_is_certain=True. Mid-spend's crossing is stable, not bootstrap noise — across seeds 0/1/2 at 50 and 150 replicates the lower bound stays in [+0.03, +0.11] and never reaches zero. But it clears break-even by cents: mid flips negative if shipping exceeds $7.06 (vs $6.50 assumed) or margin falls below 41.4% (vs 45%). Those are illustrative placeholders, so mid-spend is assumption-limited, not data-limited. Do not describe it as resolved without that caveat.
+All three segments currently have sign_is_certain=True. Mid-spend's crossing is stable, not bootstrap noise — across seeds 0/1/2 at 50 and 150 replicates the lower bound stays in [+0.03, +0.11] and never reaches zero; the 200-replicate final run gives +0.03. Estimating the tail better moved the bound TOWARD zero, so the margin is three cents, not six. But it clears break-even by cents: mid flips negative if shipping exceeds $7.06 (vs $6.50 assumed) or margin falls below 41.4% (vs 45%). Those are illustrative placeholders, so mid-spend is assumption-limited, not data-limited. Do not describe it as resolved without that caveat.

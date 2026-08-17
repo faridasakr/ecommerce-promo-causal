@@ -35,6 +35,26 @@ ROOT = Path(__file__).resolve().parents[1]
 RESULTS = ROOT / "results"
 SEGMENTS = ["low spend", "mid spend", "high spend"]
 
+# Below this, per-segment bootstraps run at a quarter count so iteration stays
+# fast. At or above it, they run at the full count.
+FULL_SEGMENT_BOOT_THRESHOLD = 100
+
+
+def segment_boot(n_boot: int) -> int:
+    """Replicate count for the per-segment bootstraps.
+
+    Segment intervals carry the targeting recommendation, and the verdict rule
+    reads their *lower tail* specifically -- the 2.5th percentile is where a
+    segment flips between "evidence supports targeting" and "economically
+    uncertain". A tail estimated from 50 draws is essentially the first or
+    second order statistic, which is far noisier than the pooled estimate it
+    sits beside. For final artefacts they get the full count.
+
+    Below the threshold the quarter count is kept, because during development
+    the point estimates matter and the tails do not.
+    """
+    return n_boot if n_boot >= FULL_SEGMENT_BOOT_THRESHOLD else max(20, n_boot // 4)
+
 
 def main(n_boot: int = 200, seed: int = 0) -> None:
     RESULTS.mkdir(exist_ok=True)
@@ -80,7 +100,7 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
     cuts = np.quantile(spend, [1 / 3, 2 / 3])
     segment = np.digitize(spend, cuts)
     hte = diagnostics.heterogeneous_effects(
-        X, t, y, segment, SEGMENTS, seed=seed, n_boot=max(20, n_boot // 4)
+        X, t, y, segment, SEGMENTS, seed=seed, n_boot=segment_boot(n_boot)
     )
     hte.to_csv(RESULTS / "heterogeneity.csv", index=False)
     for _, row in hte.iterrows():
@@ -117,7 +137,7 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
     # interval is the percentiles of the contribution draws. Two separately
     # bootstrapped quantities cannot be composed: the contribution depends on
     # both and they are correlated. Scales with --boot; this is the slow step.
-    n_boot_contrib = max(20, n_boot // 4)
+    n_boot_contrib = segment_boot(n_boot)
     print(f"  joint bootstrap of the contribution chain (n={n_boot_contrib}) …")
     contrib_boot = diagnostics.segment_contribution_bootstrap(
         X, t, y, purchased, segment, SEGMENTS,

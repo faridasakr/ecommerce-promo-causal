@@ -10,11 +10,11 @@
 
 | Segment | Incremental revenue | Gross profit @45% | Shipping subsidy | **Net contribution** | 95% CI | Verdict |
 |---|---:|---:|---:|---:|---:|---|
-| Low spend | $7.98 | $3.59 | −$2.30 | **+$1.29** | [+1.05, +1.43] | ✅ evidence supports targeting |
-| Mid spend | $7.12 | $3.21 | −$2.95 | **+$0.25** | [+0.06, +0.58] | ✅ evidence supports targeting |
-| High spend | $4.01 | $1.81 | −$3.89 | **−$2.09** | [−2.37, −1.39] | ❌ evidence suggests this segment destroys contribution |
+| Low spend | $7.98 | $3.59 | −$2.30 | **+$1.29** | [+1.05, +1.51] | ✅ evidence supports targeting |
+| Mid spend | $7.12 | $3.21 | −$2.95 | **+$0.25** | [+0.03, +0.51] | ✅ evidence supports targeting |
+| High spend | $4.01 | $1.81 | −$3.89 | **−$2.09** | [−2.49, −1.40] | ❌ evidence suggests this segment destroys contribution |
 
-**Recommendation: target the promotion at low-spend and mid-spend customers, and withhold it from high-spend. Mid-spend clears break-even by only six cents at the lower bound, and its verdict is hostage to the cost assumptions rather than to the statistics — see below before acting on it.**
+**Recommendation: target the promotion at low-spend and mid-spend customers, and withhold it from high-spend. Mid-spend clears break-even by only three cents at the lower bound, and its verdict is hostage to the cost assumptions rather than to the statistics — see below before acting on it.**
 
 **The verdict column is a rule, not a judgement call.** It reads the contribution interval, not the point estimate:
 
@@ -30,7 +30,7 @@ The subsidy scales with how many people *order*, not how much they spend. High-s
 
 Two things a revenue-only analysis would have gotten wrong: it ranks mid-spend ($7.12) as nearly as good as low-spend ($7.98), when in contribution terms one clears break-even five times as wide as the other; and it makes high-spend look worth subsidising when it destroys $2.09 per customer.
 
-**What actually decides mid-spend is not the statistics.** Its interval excludes zero, and stably so — re-running the bootstrap across three seeds at 50 and 150 replicates puts the lower bound between +$0.03 and +$0.11, never touching zero. But the segment breaks even at a shipping cost of **$7.06** against the **$6.50** assumed here. An 8.6% error in the carrier rate flips the recommendation; so does a blended margin below 41.4% against the 45% assumed. Both numbers are illustrative placeholders, not finance-sourced. Mid-spend is therefore a decision to make with finance's real figures in hand, not one this analysis settles on its own — which is what the break-even columns in `results/economics.csv` are there to make checkable.
+**What actually decides mid-spend is not the statistics.** Its interval excludes zero, and stably so — re-running the bootstrap across three seeds at 50 and 150 replicates puts the lower bound between +$0.03 and +$0.11, never touching zero, and the final 200-replicate run lands at +$0.03. Note the direction: estimating the tail better moved the bound *closer* to zero, not further from it. But the segment breaks even at a shipping cost of **$7.06** against the **$6.50** assumed here. An 8.6% error in the carrier rate flips the recommendation; so does a blended margin below 41.4% against the 45% assumed. Both numbers are illustrative placeholders, not finance-sourced. Mid-spend is therefore a decision to make with finance's real figures in hand, not one this analysis settles on its own — which is what the break-even columns in `results/economics.csv` are there to make checkable.
 
 **The subsidy multiplier has to be causal too.** How many orders you subsidise is the purchase rate you would face *if the segment were treated* — P(purchase | do(T=1)) — not the purchase rate observed among customers who chose the promo. Those customers self-selected, and the traits that drove uptake also drive purchasing, so the observed rate runs high:
 
@@ -48,11 +48,11 @@ That matters because the two estimates are strongly *positively* correlated acro
 
 | Segment | corr(revenue, rate) | Revenue CI only | Composed as independent | Joint (correct) |
 |---|---:|---:|---:|---:|
-| Low spend | +0.88 | 0.148 | 0.164 | 0.092 |
-| Mid spend | +0.58 | 0.158 | 0.167 | 0.134 |
-| High spend | +0.34 | 0.295 | 0.298 | 0.284 |
+| Low spend | +0.87 | 0.176 | 0.191 | 0.117 |
+| Mid spend | +0.66 | 0.159 | 0.168 | 0.130 |
+| High spend | +0.43 | 0.303 | 0.306 | 0.287 |
 
-Standard deviation of the net contribution across bootstrap replicates, from `results/contribution_bootstrap.csv`. Holding the rate fixed overstates the spread by **60% / 18% / 4%**; composing two separately-bootstrapped quantities as if independent overstates it by **77% / 25% / 5%**. Both errors scale with the correlation, which is exactly the quantity a composed interval throws away.
+Standard deviation of the net contribution across bootstrap replicates, from `results/contribution_bootstrap.csv`. Holding the rate fixed overstates the spread by **50% / 23% / 6%**; composing two separately-bootstrapped quantities as if independent overstates it by **63% / 29% / 7%**. Both errors scale with the correlation, which is exactly the quantity a composed interval throws away.
 
 Note the direction is not something to reason out in advance. Adding a second source of uncertainty *sounds* like it should widen the interval, and for a sum it would. For a difference with positively correlated terms it narrows. That is why the resampling has to be joint rather than assembled from parts — the covariance is doing real work and only a single resampling of the whole chain captures it.
 
