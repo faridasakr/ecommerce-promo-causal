@@ -275,6 +275,80 @@ def test_causal_incidence_recovers_planted_lift(data):
     assert 0.0 < p1 < 1.0 and 0.0 < p0 < 1.0, "probabilities must stay in (0, 1)"
 
 
+def test_contribution_ci_comes_from_joint_bootstrap_when_supplied():
+    """A supplied joint-bootstrap interval must be used verbatim.
+
+    The fallback path propagates only the revenue CI while holding the purchase
+    rate fixed, which understates uncertainty now that the rate is estimated
+    too. When a joint interval is available it must win, and `ci_source` must
+    say which path produced the number.
+    """
+    hte = pd.DataFrame({"segment": ["low spend"], "ate": [8.0],
+                        "ci_low": [7.2], "ci_high": [8.2]})
+    rates = {"low spend": 0.30}
+
+    fallback = economics.segment_economics(hte, rates)
+    assert "revenue CI only" in fallback["ci_source"].iloc[0]
+    # Revenue-only propagation: margin * ate_ci - fixed subsidy.
+    ship = economics.CostAssumptions().shipping_cost_per_order
+    assert fallback["net_contribution_low"].iloc[0] == pytest.approx(
+        7.2 * 0.45 - ship * 0.30, abs=0.01
+    )
+
+    joint = economics.segment_economics(
+        hte, rates, contribution_ci={"low spend": (-0.5, 2.5)}
+    )
+    assert joint["net_contribution_low"].iloc[0] == pytest.approx(-0.5)
+    assert joint["net_contribution_high"].iloc[0] == pytest.approx(2.5)
+    assert "joint bootstrap" in joint["ci_source"].iloc[0]
+    # Straddles zero, so the sign must be reported as unresolved.
+    assert not bool(joint["sign_is_certain"].iloc[0])
+
+
+def test_joint_bootstrap_reflects_both_sources_of_uncertainty(data):
+    """The contribution interval must respond to BOTH estimated quantities.
+
+    Note the direction is deliberately not asserted. Because
+    net = margin*ate - ship*rate, a positive correlation between the two
+    estimates CANCELS variance rather than adding it, so the correct joint
+    interval can be narrower than the revenue-only one. (It is here: the two
+    correlate around +0.5 across replicates.) What must hold is that the rate
+    genuinely varies per replicate -- if it were pinned at its point estimate,
+    the joint width would exactly equal the revenue-only width, since a
+    constant subsidy shifts an interval without resizing it.
+    """
+    X, t, y, names, truth = data
+    purchased = (y > 0).astype(int)
+    segment = np.zeros(len(y), dtype=int)  # single segment: whole fixture
+    a = economics.CostAssumptions()
+
+    boot = diagnostics.segment_contribution_bootstrap(
+        X, t, y, purchased, segment, ["all"],
+        gross_margin=a.gross_margin,
+        shipping_cost_per_order=a.shipping_cost_per_order,
+        n_boot=25, seed=0,
+    )
+    row = boot.iloc[0]
+    assert row["n_draws"] >= 20, "too few usable draws to form an interval"
+
+    joint_width = row["net_contribution_high"] - row["net_contribution_low"]
+    # Revenue-only width is just the ATE interval scaled by margin: a fixed
+    # subsidy shifts the interval without changing its width.
+    revenue_only_width = (row["ate_ci_high"] - row["ate_ci_low"]) * a.gross_margin
+
+    assert joint_width > 0
+    assert abs(joint_width - revenue_only_width) > 1e-6, (
+        "joint width equals the revenue-only width, which means the purchase "
+        "rate was held fixed across replicates instead of re-estimated"
+    )
+    # The rate must be a genuine interval inside (0, 1), not a pinned point.
+    assert 0.0 < row["causal_rate_ci_low"] < row["causal_rate_ci_high"] < 1.0
+
+    # The covariance that makes a joint bootstrap necessary must be recorded.
+    assert np.isfinite(row["corr_ate_rate"])
+    assert -1.0 <= row["corr_ate_rate"] <= 1.0
+
+
 def test_economics_reports_breakeven_and_caveats():
     hte = pd.DataFrame({"segment": ["low spend"], "ate": [8.0], "ci_low": [7.2], "ci_high": [8.2]})
     econ = economics.segment_economics(hte, {"low spend": 0.40})

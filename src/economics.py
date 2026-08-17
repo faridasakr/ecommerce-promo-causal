@@ -48,6 +48,7 @@ def segment_economics(
     purchase_rates: dict[str, float],
     assumptions: CostAssumptions | None = None,
     observed_rates: dict[str, float] | None = None,
+    contribution_ci: dict[str, tuple[float, float]] | None = None,
 ) -> pd.DataFrame:
     """Per-segment contribution analysis.
 
@@ -67,6 +68,16 @@ def segment_economics(
     observed_rates : the confounded rate, carried through for comparison only.
         Reported next to the causal figure so the gap is visible rather than
         asserted. Never used in the arithmetic.
+    contribution_ci : {segment: (low, high)} from a JOINT bootstrap in which
+        each replicate re-estimated the revenue ATE and the purchase
+        probability on the same resample. Preferred, because the contribution
+        depends on both and they are correlated.
+
+        Without it, the interval falls back to propagating the revenue CI alone
+        while holding the purchase rate fixed at its point estimate. That
+        understates uncertainty -- the rate is estimated too. The fallback is
+        kept for callers that have no bootstrap, and the `ci_source` column
+        records which path produced the interval so a reader can tell.
     """
     a = assumptions or CostAssumptions()
     rows = []
@@ -109,15 +120,23 @@ def segment_economics(
                 -a.shipping_cost_per_order * obs, 2
             )
 
-        # Propagate the causal CI through to contribution, so the decision
-        # carries the estimate's uncertainty rather than laundering it away.
-        if "ci_low" in r and np.isfinite(r.get("ci_low", np.nan)):
-            row["net_contribution_low"] = round(
-                float(r["ci_low"]) * a.gross_margin - subsidy, 2
-            )
-            row["net_contribution_high"] = round(
-                float(r["ci_high"]) * a.gross_margin - subsidy, 2
-            )
+        # The decision must carry the estimate's uncertainty rather than
+        # laundering it away. Prefer the joint bootstrap: it is the only version
+        # that reflects uncertainty in BOTH the revenue effect and the purchase
+        # probability, and the covariance between them.
+        lo = hi = None
+        if contribution_ci is not None and seg in contribution_ci:
+            lo, hi = contribution_ci[seg]
+            source = "joint bootstrap (revenue + incidence)"
+        elif "ci_low" in r and np.isfinite(r.get("ci_low", np.nan)):
+            lo = float(r["ci_low"]) * a.gross_margin - subsidy
+            hi = float(r["ci_high"]) * a.gross_margin - subsidy
+            source = "revenue CI only (purchase rate held fixed — understates uncertainty)"
+
+        if lo is not None and np.isfinite(lo) and np.isfinite(hi):
+            row["net_contribution_low"] = round(lo, 2)
+            row["net_contribution_high"] = round(hi, 2)
+            row["ci_source"] = source
             row["sign_is_certain"] = bool(
                 np.sign(row["net_contribution_low"]) == np.sign(row["net_contribution_high"])
             )

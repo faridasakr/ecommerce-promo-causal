@@ -236,6 +236,102 @@ def causal_incidence_by_segment(
     return pd.DataFrame(rows)
 
 
+def segment_contribution_bootstrap(
+    X: np.ndarray,
+    t: np.ndarray,
+    y: np.ndarray,
+    purchased: np.ndarray,
+    segment: np.ndarray,
+    labels: list[str],
+    gross_margin: float,
+    shipping_cost_per_order: float,
+    n_boot: int = 50,
+    seed: int = 0,
+) -> pd.DataFrame:
+    """Joint bootstrap of the whole contribution chain, per segment.
+
+    The contribution depends on TWO estimated quantities -- the revenue ATE and
+    the causal purchase probability -- and both carry sampling uncertainty.
+    Composing an interval from two separately-bootstrapped quantities would be
+    wrong twice over: it ignores their covariance, and it treats whichever one
+    was held fixed as if it were known exactly.
+
+    So each replicate resamples the segment ONCE and re-runs the entire chain on
+    that resample: revenue ATE, P(purchase | do(T=1)), and the net contribution
+    they imply. Percentiles are taken over the contribution draws directly. The
+    two estimates move together across replicates exactly as they do in the
+    data, because they are computed from the same resampled customers.
+
+    Returns per-segment percentile intervals for all three quantities. The ATE
+    interval comes from the same draws as the contribution interval, so the two
+    are mutually consistent rather than two different resamplings of the same
+    segment.
+    """
+    from estimators import aipw, aipw_arm_means
+
+    rng = np.random.default_rng(seed)
+    rows = []
+
+    for k, label in enumerate(labels):
+        m = segment == k
+        Xs, ts, ys, ps = X[m], t[m], y[m], purchased[m]
+        n = len(ys)
+
+        ate_draws: list[float] = []
+        rate_draws: list[float] = []
+        net_draws: list[float] = []
+
+        if n >= 500 and ts.sum() >= 50:
+            for _ in range(n_boot):
+                idx = rng.integers(0, n, size=n)
+                try:
+                    # Same resample feeds both estimates -- that is the point.
+                    a = aipw(Xs[idx], ts[idx], ys[idx], seed=seed)
+                    _, p1 = aipw_arm_means(Xs[idx], ts[idx], ps[idx], seed=seed)
+                except Exception:
+                    continue
+                if not (np.isfinite(a) and np.isfinite(p1)):
+                    continue
+                ate_draws.append(a)
+                rate_draws.append(p1)
+                net_draws.append(a * gross_margin - shipping_cost_per_order * p1)
+
+        def pct(draws: list[float]) -> tuple[float, float]:
+            if len(draws) < 20:
+                return (np.nan, np.nan)
+            return (float(np.percentile(draws, 2.5)),
+                    float(np.percentile(draws, 97.5)))
+
+        ate_lo, ate_hi = pct(ate_draws)
+        rate_lo, rate_hi = pct(rate_draws)
+        net_lo, net_hi = pct(net_draws)
+
+        # The covariance is the whole reason this has to be a joint bootstrap.
+        # net = margin*ate - ship*rate, so a POSITIVE correlation between the
+        # two cancels variance rather than adding it: composing independent
+        # bootstraps would overstate the interval. Recorded so the direction of
+        # the correction is auditable rather than asserted.
+        corr = (
+            float(np.corrcoef(ate_draws, rate_draws)[0, 1])
+            if len(net_draws) >= 20
+            else np.nan
+        )
+
+        rows.append({
+            "segment": label,
+            "ate_ci_low": ate_lo,
+            "ate_ci_high": ate_hi,
+            "causal_rate_ci_low": rate_lo,
+            "causal_rate_ci_high": rate_hi,
+            "net_contribution_low": net_lo,
+            "net_contribution_high": net_hi,
+            "corr_ate_rate": corr,
+            "n_draws": len(net_draws),
+        })
+
+    return pd.DataFrame(rows)
+
+
 def unmeasured_confounding_stress_test(
     X: np.ndarray,
     t: np.ndarray,

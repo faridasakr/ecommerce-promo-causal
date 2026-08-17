@@ -111,8 +111,29 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
               f"{r['causal_rate_treated']:.3f} "
               f"(lift {r['incidence_lift']:+.3f})")
 
+    # Joint bootstrap: each replicate re-runs the whole chain (revenue ATE ->
+    # causal purchase probability -> net contribution) on one resample, and the
+    # interval is the percentiles of the contribution draws. Two separately
+    # bootstrapped quantities cannot be composed: the contribution depends on
+    # both and they are correlated. Scales with --boot; this is the slow step.
+    n_boot_contrib = max(20, n_boot // 4)
+    print(f"  joint bootstrap of the contribution chain (n={n_boot_contrib}) …")
+    contrib_boot = diagnostics.segment_contribution_bootstrap(
+        X, t, y, purchased, segment, SEGMENTS,
+        gross_margin=assumptions.gross_margin,
+        shipping_cost_per_order=assumptions.shipping_cost_per_order,
+        n_boot=n_boot_contrib, seed=seed,
+    )
+    contrib_boot.to_csv(RESULTS / "contribution_bootstrap.csv", index=False)
+    contribution_ci = {
+        r["segment"]: (r["net_contribution_low"], r["net_contribution_high"])
+        for _, r in contrib_boot.iterrows()
+    }
+
     econ = economics.segment_economics(
-        hte, causal_rates, assumptions, observed_rates=observed_rates
+        hte, causal_rates, assumptions,
+        observed_rates=observed_rates,
+        contribution_ci=contribution_ci,
     )
     econ.to_csv(RESULTS / "economics.csv", index=False)
     print(f"  assuming {assumptions.gross_margin:.0%} gross margin, "
