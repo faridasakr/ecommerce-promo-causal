@@ -1,0 +1,14 @@
+{
+  "true_ate": 5.86743499737903,
+  "true_att": 5.978596579904368,
+  "incidence_lift_pp": 0.055,
+  "basket_lift_dollars": 12.0,
+  "hte_slope": 6.0,
+  "true_ate_low_spend_tercile": 7.413358970680946,
+  "true_ate_high_spend_tercile": 3.2909144245130326,
+  "naive_diff_in_means": 23.033440545746405,
+  "treated_share": 0.37342,
+  "n": 50000,
+  "seed": 20260816,
+  "note": "true_ate is computed directly from the full potential-outcome pairs (Y1, Y0) and is the number to score estimators against. It combines the incidence lift and the basket lift, so it is not simply BASKET_LIFT."
+}

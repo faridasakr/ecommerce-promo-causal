@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.ipynb_checkpoints/
+.pytest_cache/
+data/raw/*.csv
+results/*.png
+.DS_Store
+
+# NOTE: data/ground_truth/answer_key.json is deliberately NOT ignored.
+# It is committed so reviewers can verify the scoring themselves. The isolation
+# guarantee is enforced in code, not by hiding the file:
+#   - only run_analysis.py reads it, and only at the final scoring step
+#   - tests/test_pipeline.py::test_ground_truth_not_read_by_analysis_modules
+#     fails the build if any analysis module references it
+#   - see data/ground_truth/README.md for the Project-2 agent contract
