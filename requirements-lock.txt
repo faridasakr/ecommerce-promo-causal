@@ -1,3 +1,7 @@
+# Resolved on Python 3.9.6 (macOS system interpreter).
+# Record of the environment that produced the committed results/.
+# NOT the install source — requirements.txt is the loose spec, and HF Spaces
+# installs from that.
 altair==5.5.0
 annotated-types==0.7.0
 anthropic==0.122.0
