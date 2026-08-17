@@ -1,0 +1,87 @@
+{
+  "what_this_is": "Scoring artefact. Contains the planted ground truth and is therefore NOT visible to the LLM stakeholder layer -- see results/stakeholder_summary.json for that. Read only by the scoring step and the app's estimator-comparison tab.",
+  "true_ate_revealed": 5.86743499737903,
+  "true_att_revealed": 5.978596579904368,
+  "estimates": [
+    {
+      "estimator": "Naive difference in means",
+      "target_estimand": "ATE",
+      "target_population": "full sample",
+      "n_target": 50000,
+      "estimate": 23.033,
+      "ci_low": 22.396,
+      "ci_high": 23.567,
+      "ci_note": "",
+      "true_value": null,
+      "bias": null,
+      "abs_pct_error": null,
+      "ci_covers_truth": null
+    },
+    {
+      "estimator": "OLS regression adjustment",
+      "target_estimand": "ATE",
+      "target_population": "full sample",
+      "n_target": 50000,
+      "estimate": 7.086,
+      "ci_low": 6.6,
+      "ci_high": 7.725,
+      "ci_note": "",
+      "true_value": 5.867,
+      "bias": 1.218,
+      "abs_pct_error": 20.8,
+      "ci_covers_truth": false
+    },
+    {
+      "estimator": "Propensity score matching",
+      "target_estimand": "ATT",
+      "target_population": "matched treated",
+      "n_target": 18664,
+      "estimate": 7.079,
+      "ci_low": null,
+      "ci_high": null,
+      "ci_note": "not reported \u2014 ordinary bootstrap is invalid for fixed-NN matching (Abadie & Imbens 2008)",
+      "true_value": 5.98,
+      "bias": 1.099,
+      "abs_pct_error": 18.4,
+      "ci_covers_truth": null
+    },
+    {
+      "estimator": "IPW (stabilised)",
+      "target_estimand": "ATE",
+      "target_population": "trimmed (logistic)",
+      "n_target": 49879,
+      "estimate": 6.376,
+      "ci_low": 5.682,
+      "ci_high": 7.268,
+      "ci_note": "",
+      "true_value": 5.869,
+      "bias": 0.507,
+      "abs_pct_error": 8.6,
+      "ci_covers_truth": true
+    },
+    {
+      "estimator": "AIPW (cross-fitted, doubly robust)",
+      "target_estimand": "ATE",
+      "target_population": "trimmed (cross-fit)",
+      "n_target": 49972,
+      "estimate": 6.415,
+      "ci_low": 5.981,
+      "ci_high": 7.164,
+      "ci_note": "",
+      "true_value": 5.868,
+      "bias": 0.547,
+      "abs_pct_error": 9.3,
+      "ci_covers_truth": false
+    }
+  ],
+  "scoring_note": "Each estimator is scored against the mean individual treatment effect over the units it actually used: the full sample for OLS, the trimmed sample for IPW and AIPW (which trim under different propensity models), and the matched treated units for PSM, which targets the ATT. The naive difference in means is a descriptive contrast between self-selected groups and has no causal target, so it is reported without a true value or bias.",
+  "intervals_containing_target": {
+    "n_containing": 1,
+    "n_assessable": 3,
+    "excluded": {
+      "Naive difference in means": "no causal target",
+      "Propensity score matching": "no valid bootstrap interval"
+    },
+    "note": "A count for THIS realization, not an estimate of the procedure's coverage rate. A rate would require a simulation study over many replications. Do not call this 'under-coverage' or quote it as a percentage."
+  }
+}

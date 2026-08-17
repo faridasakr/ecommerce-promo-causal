@@ -2,14 +2,22 @@
 
 The design decision that matters here:
 
-    The LLM NEVER sees the raw customer data. It only sees results/summary.json
-    -- the numbers the causal pipeline actually computed.
+    The LLM NEVER sees the raw customer data, and never sees the planted
+    ground truth. It sees only results/stakeholder_summary.json -- the numbers
+    the causal pipeline actually computed.
 
 That is deliberate. If you hand an LLM the raw table and ask "did the promo
 work?", it will happily run a mental difference-in-means and report $23. The
 whole point of the project is that $23 is wrong. So the statistical reasoning
 stays in Python, where it is testable, and the LLM is restricted to translating
 computed results into stakeholder language.
+
+The ground truth is excluded for a second reason. The scoring figures live in
+results/evaluation_summary.json, which this module must not read. A model that
+can see the planted effect can quote it, and on real data that number does not
+exist -- the assistant would be leaning on knowledge the analysis could never
+have. Keeping the answer key out is what makes its output an honest rehearsal
+of the real-data case.
 
 Three guardrails on top:
   1. A system prompt that forbids causal claims not present in the summary, and
@@ -107,10 +115,17 @@ CAUSAL_VERBS = [
 
 
 def load_summary() -> dict:
-    path = ROOT / "results" / "summary.json"
+    """Load the stakeholder artefact -- the only results file this layer may read.
+
+    Never point this at evaluation_summary.json. That file holds the planted
+    ground truth, and feeding it to the model would defeat the separation this
+    module exists to enforce.
+    """
+    path = ROOT / "results" / "stakeholder_summary.json"
     if not path.exists():
         raise FileNotFoundError(
-            "results/summary.json not found -- run `python src/run_analysis.py` first."
+            "results/stakeholder_summary.json not found -- run "
+            "`python src/run_analysis.py` first."
         )
     with open(path) as f:
         return json.load(f)

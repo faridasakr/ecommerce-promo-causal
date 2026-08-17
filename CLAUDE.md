@@ -47,7 +47,12 @@ These are the load-bearing design decisions. Each has a test guarding it; if a c
 
    Scoring goes further: each estimator is compared to the mean individual effect over *the units it actually used*, derived from its own mask (`ipw_trim_mask`, `aipw_trim_mask`, `psm_matched_treated`). Trimming and matching change the estimand, so a shared full-population target would grade estimators against a population they never estimated. `tau_individual.npy` must be joined on `customer_id` — the raw CSV is shuffled, and positional alignment fails silently.
 
-3. **The LLM never sees raw data** — only `results/summary.json`. Handed the raw table, a model reproduces the naive $23 figure, which is the exact error the project exists to prevent. Statistical reasoning stays in tested Python.
+3. **The LLM never sees raw data — and never sees the ground truth.** Results are split into two artefacts:
+
+   - `results/stakeholder_summary.json` — estimates, CIs, diagnostics, economics, recommendation, assumptions. **No ground truth.** This is the only results file `explain.py` and the app's assistant tab may read.
+   - `results/evaluation_summary.json` — planted truth, per-estimator bias, scoring. Read only by the scoring step and the app's estimator-comparison tab.
+
+   Handed the raw table, a model reproduces the naive $23 figure — the exact error the project exists to prevent. Handed the answer key, it quotes a number that on real data does not exist, so its output stops being an honest rehearsal of the real-data case. `run_analysis.py` may read the key (invariant 1) but must not write it into the stakeholder artefact; that would leak it transitively. Guarded by `test_stakeholder_summary_contains_no_ground_truth`, which walks every nested key for `true_`, plus the scoring fields (`bias`, `abs_pct_error`, `ci_covers_truth`), and by `test_explain_layer_reads_only_the_stakeholder_artefact`.
 
 4. **Two propensity models, diagnosed separately.** IPW/PSM use logistic; AIPW uses cross-fitted gradient boosting. Balance and overlap are reported per-model so a clean table from one cannot vouch for an estimate from the other. Balance is computed on the *trimmed* population, matching what the estimators actually use.
 

@@ -23,16 +23,25 @@ st.set_page_config(page_title="Did Free Shipping Work?", layout="wide")
 
 @st.cache_data
 def load_results():
-    with open(ROOT / "results" / "summary.json") as f:
+    """Two summaries, kept apart on purpose.
+
+    `summary` is the stakeholder artefact and carries NO ground truth -- it is
+    what the assistant tab passes to the LLM. `evaluation` holds the planted
+    truth and per-estimator bias, and is used only by the estimator-comparison
+    tab, which is explicitly a scoring view.
+    """
+    with open(ROOT / "results" / "stakeholder_summary.json") as f:
         summary = json.load(f)
+    with open(ROOT / "results" / "evaluation_summary.json") as f:
+        evaluation = json.load(f)
     estimates = pd.read_csv(ROOT / "results" / "estimates.csv")
     hte = pd.read_csv(ROOT / "results" / "heterogeneity.csv")
     balance = pd.read_csv(ROOT / "results" / "balance.csv")
     sens = pd.read_csv(ROOT / "results" / "stress_test.csv")
-    return summary, estimates, hte, balance, sens
+    return summary, evaluation, estimates, hte, balance, sens
 
 
-summary, estimates, hte, balance, sens = load_results()
+summary, evaluation, estimates, hte, balance, sens = load_results()
 
 st.title("Did free shipping actually work?")
 st.caption(
@@ -53,7 +62,7 @@ c2.metric(
     delta_color="inverse",
     help=summary["headline_method"],
 )
-c3.metric("True effect (held out)", f"${summary['true_ate_revealed']:.2f}")
+c3.metric("True effect (held out)", f"${evaluation['true_ate_revealed']:.2f}")
 
 st.markdown(
     f"> The **estimated causal effect** of the promotion is "
@@ -65,7 +74,7 @@ st.markdown(
 )
 st.caption(
     f"Because this is synthetic data, the planted causal truth is known: "
-    f"${summary['true_ate_revealed']:.2f}. Every estimator below is scored against it. "
+    f"${evaluation['true_ate_revealed']:.2f}. Every estimator below is scored against it. "
     f"On real data that column would not exist — which is exactly why the "
     f"diagnostics and assumptions carry the weight."
 )

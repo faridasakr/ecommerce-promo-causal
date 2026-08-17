@@ -9,7 +9,8 @@ Outputs (all to results/):
     heterogeneity.csv    effect by prior-spend tercile, with CIs
     economics.csv        contribution analysis -> the targeting decision
     stress_test.csv      estimate under simulated unmeasured confounding
-    summary.json         everything the LLM explanation layer is allowed to see
+    stakeholder_summary.json  everything the LLM layer is allowed to see -- NO ground truth
+    evaluation_summary.json   ground truth + per-estimator bias; never shown to the LLM
 
 The ground-truth answer key is read ONLY in step 7. Nothing upstream touches it,
 and `tests/test_pipeline.py::test_ground_truth_not_read_by_estimator_modules`
@@ -259,13 +260,13 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
             "SUTVA: one customer's promo use does not affect another's revenue.",
         ],
         "estimand_note": (
-            "Each estimator is scored against the mean individual treatment "
-            "effect over the units it actually used: the full sample for OLS, "
-            "the trimmed sample for IPW and AIPW (which trim under different "
-            "propensity models), and the matched treated units for PSM, which "
-            "targets the ATT. The naive difference in means is a descriptive "
-            "contrast between self-selected groups and has no causal target, so "
-            "it is reported without a true value or bias."
+            "Propensity score matching targets the ATT -- the effect among "
+            "customers who actually used the promo. Every other estimator "
+            "targets the ATE, the effect if the promo were extended to "
+            "everyone. Trimming and matching also change which customers an "
+            "estimate refers to, which is recorded per estimator in "
+            "target_population. These are different questions and their "
+            "answers should not be compared as if they were the same number."
         ),
         "propensity_models": {
             "logistic": {
@@ -287,20 +288,14 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
             "Simulation-based stress test, not a Rosenbaum bound or E-value. "
             "gamma is not calibrated to a real-world confounding strength."
         ),
-        "true_ate_revealed": float(truth["true_ate"]),
-        "true_att_revealed": float(truth["true_att"]),
-        "ci_coverage_note": (
-            "Bootstrap CIs capture sampling variability only, not model "
-            "misspecification. Some intervals exclude the true value despite "
-            "small point-estimate error. Counts of intervals containing their "
-            "target describe THIS realization only; they are not an estimate of "
-            "the procedure's coverage rate, which would require a simulation "
-            "study over many replications. Do not describe this as "
-            "'under-coverage' or quote it as a coverage percentage."
+        "ci_interpretation_note": (
+            "Bootstrap confidence intervals quantify sampling variability only "
+            "-- how much the estimate would move if the sample were redrawn. "
+            "They do NOT bound error from model misspecification, so a tight "
+            "interval is not by itself evidence that an estimate is close to "
+            "correct. Report intervals, never a point estimate alone."
         ),
     }
-    with open(RESULTS / "summary.json", "w") as f:
-        json.dump(summary, f, indent=2)
 
     # Only assessable where an interval exists AND has a target to contain:
     # naive has no causal target, PSM has no valid bootstrap interval. This is a
@@ -308,6 +303,55 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
     # is a property of the procedure and needs many replications to measure.
     scored = est_df[est_df["true_value"].notna() & est_df["ci_low"].notna()]
     n_covering = int(scored["ci_covers_truth"].sum())
+
+    # ------------------------------------------------------------------
+    # Two artefacts, deliberately separated.
+    #
+    # The ground truth must not reach the LLM. run_analysis.py is allowed to
+    # read the answer key, but writing it into the file explain.py consumes
+    # would leak it transitively and defeat invariant 3 -- the model could then
+    # quote the planted effect, which on real data would not exist and which
+    # the whole project exists to say you cannot know.
+    # ------------------------------------------------------------------
+    with open(RESULTS / "stakeholder_summary.json", "w") as f:
+        json.dump(summary, f, indent=2)
+
+    evaluation = {
+        "what_this_is": (
+            "Scoring artefact. Contains the planted ground truth and is "
+            "therefore NOT visible to the LLM stakeholder layer -- see "
+            "results/stakeholder_summary.json for that. Read only by the "
+            "scoring step and the app's estimator-comparison tab."
+        ),
+        "true_ate_revealed": float(truth["true_ate"]),
+        "true_att_revealed": float(truth["true_att"]),
+        "estimates": est_df.replace({np.nan: None}).to_dict(orient="records"),
+        "scoring_note": (
+            "Each estimator is scored against the mean individual treatment "
+            "effect over the units it actually used: the full sample for OLS, "
+            "the trimmed sample for IPW and AIPW (which trim under different "
+            "propensity models), and the matched treated units for PSM, which "
+            "targets the ATT. The naive difference in means is a descriptive "
+            "contrast between self-selected groups and has no causal target, "
+            "so it is reported without a true value or bias."
+        ),
+        "intervals_containing_target": {
+            "n_containing": n_covering,
+            "n_assessable": int(len(scored)),
+            "excluded": {
+                "Naive difference in means": "no causal target",
+                "Propensity score matching": "no valid bootstrap interval",
+            },
+            "note": (
+                "A count for THIS realization, not an estimate of the "
+                "procedure's coverage rate. A rate would require a simulation "
+                "study over many replications. Do not call this "
+                "'under-coverage' or quote it as a percentage."
+            ),
+        },
+    }
+    with open(RESULTS / "evaluation_summary.json", "w") as f:
+        json.dump(evaluation, f, indent=2)
     print("\n" + "=" * 72)
     print(f"ESTIMATED CAUSAL EFFECT: ${headline['estimate']:.2f} per customer "
           f"(95% CI ${headline['ci_low']:.2f}-${headline['ci_high']:.2f})")

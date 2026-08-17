@@ -474,6 +474,91 @@ def test_system_prompt_requires_refusal_and_intervals():
     assert "never give" in low and "point estimate" in low
 
 
+# ------------------------------------- stakeholder / evaluation artefact split
+def _walk_keys(obj, prefix=""):
+    """Every key path in a nested JSON structure."""
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            path = f"{prefix}.{k}" if prefix else k
+            yield path
+            yield from _walk_keys(v, path)
+    elif isinstance(obj, list):
+        for i, v in enumerate(obj):
+            yield from _walk_keys(v, f"{prefix}[{i}]")
+
+
+def test_stakeholder_summary_contains_no_ground_truth(results_present):
+    """The LLM artefact must not carry the planted truth, at any nesting depth.
+
+    run_analysis.py is allowed to read the answer key, but writing it into the
+    file explain.py consumes would leak it transitively and defeat invariant 3.
+    A model that can see the planted effect can quote it -- and on real data
+    that number does not exist.
+    """
+    path = RESULTS / "stakeholder_summary.json"
+    if not path.exists():
+        pytest.skip("run `make analysis` first")
+    summary = json.loads(path.read_text())
+
+    offenders = [k for k in _walk_keys(summary) if "true_" in k.lower()]
+    assert not offenders, (
+        f"stakeholder_summary.json exposes ground-truth keys to the LLM: "
+        f"{offenders}. Those belong in evaluation_summary.json."
+    )
+
+    # The per-estimator scoring columns are ground truth by another name.
+    # Matched on the exact leaf key, not as a substring: `selection_bias_dollars`
+    # is naive minus headline -- two estimates, no truth -- and is legitimate
+    # here, whereas a bare `bias` field is the distance from the answer key.
+    banned = {"bias", "abs_pct_error", "ci_covers_truth", "true_value"}
+    leaves = {k.rsplit(".", 1)[-1].lower() for k in _walk_keys(summary)}
+    exposed = banned & leaves
+    assert not exposed, (
+        f"stakeholder_summary.json exposes per-estimator scoring fields "
+        f"{sorted(exposed)} -- those belong in evaluation_summary.json"
+    )
+
+
+def test_evaluation_summary_keeps_the_scoring_figures(results_present):
+    """The split must not lose the ground truth -- only relocate it."""
+    path = RESULTS / "evaluation_summary.json"
+    if not path.exists():
+        pytest.skip("run `make analysis` first")
+    ev = json.loads(path.read_text())
+
+    assert "true_ate_revealed" in ev and "true_att_revealed" in ev
+    assert ev["estimates"], "per-estimator scoring rows must be present"
+    assert any(
+        r.get("bias") is not None for r in ev["estimates"]
+    ), "per-estimator bias must survive the split"
+
+
+def test_explain_layer_reads_only_the_stakeholder_artefact():
+    """explain.py must not reference the evaluation artefact in live code."""
+    source = (SRC / "explain.py").read_text()
+    tree = ast.parse(source)
+    docstrings = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.FunctionDef, ast.ClassDef)):
+            d = ast.get_docstring(node, clean=False)
+            if d:
+                docstrings.add(d)
+    live = [
+        n.value
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Constant)
+        and isinstance(n.value, str)
+        and n.value not in docstrings
+    ]
+    assert not any("evaluation_summary" in s for s in live), (
+        "explain.py references evaluation_summary.json in live code -- that "
+        "file holds the planted truth and must never reach the LLM"
+    )
+    assert any("stakeholder_summary" in s for s in live), (
+        "explain.py should load stakeholder_summary.json"
+    )
+
+
 # ------------------------------------------------------- ground-truth hygiene
 def test_ground_truth_not_read_by_analysis_modules():
     """Only run_analysis.py may touch the answer key, and only to score.

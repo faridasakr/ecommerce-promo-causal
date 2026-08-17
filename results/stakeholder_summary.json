@@ -17,7 +17,7 @@
     "Positivity: every customer had a non-zero probability of both using and not using the promo (checked via overlap; trimmed where violated).",
     "SUTVA: one customer's promo use does not affect another's revenue."
   ],
-  "estimand_note": "Each estimator is scored against the mean individual treatment effect over the units it actually used: the full sample for OLS, the trimmed sample for IPW and AIPW (which trim under different propensity models), and the matched treated units for PSM, which targets the ATT. The naive difference in means is a descriptive contrast between self-selected groups and has no causal target, so it is reported without a true value or bias.",
+  "estimand_note": "Propensity score matching targets the ATT -- the effect among customers who actually used the promo. Every other estimator targets the ATE, the effect if the promo were extended to everyone. Trimming and matching also change which customers an estimate refers to, which is recorded per estimator in target_population. These are different questions and their answers should not be compared as if they were the same number.",
   "propensity_models": {
     "logistic": {
       "used_by": [
@@ -185,7 +185,5 @@
     }
   ],
   "stress_test_caveat": "Simulation-based stress test, not a Rosenbaum bound or E-value. gamma is not calibrated to a real-world confounding strength.",
-  "true_ate_revealed": 5.86743499737903,
-  "true_att_revealed": 5.978596579904368,
-  "ci_coverage_note": "Bootstrap CIs capture sampling variability only, not model misspecification. Some intervals exclude the true value despite small point-estimate error. Counts of intervals containing their target describe THIS realization only; they are not an estimate of the procedure's coverage rate, which would require a simulation study over many replications. Do not describe this as 'under-coverage' or quote it as a coverage percentage."
+  "ci_interpretation_note": "Bootstrap confidence intervals quantify sampling variability only -- how much the estimate would move if the sample were redrawn. They do NOT bound error from model misspecification, so a tight interval is not by itself evidence that an estimate is close to correct. Report intervals, never a point estimate alone."
 }
