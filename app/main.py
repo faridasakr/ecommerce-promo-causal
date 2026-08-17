@@ -120,17 +120,27 @@ with tab5:
     )
     st.dataframe(
         econ[["segment", "incremental_revenue", "gross_profit", "shipping_subsidy",
-              "net_contribution", "profitable", "breakeven_shipping_cost"]],
+              "net_contribution", "net_contribution_low", "net_contribution_high",
+              "verdict", "breakeven_shipping_cost"]],
         width="stretch", hide_index=True,
     )
     st.bar_chart(econ.set_index("segment")["net_contribution"])
 
     st.success(f"**Decision:** {rec['decision']}")
+    st.caption(f"Decision rule — {rec['decision_rule']}")
     st.markdown(
         f"Blanket offer nets **\\${rec['net_contribution_blanket_offer']:.2f}** "
-        f"per customer; targeting only the profitable segment nets "
+        f"per customer; targeting only the segments the evidence supports nets "
         f"**\\${rec['net_contribution_targeted_offer']:.2f}**."
     )
+    if rec["segments_economically_uncertain"]:
+        st.warning(
+            "**Economically uncertain: "
+            f"{', '.join(rec['segments_economically_uncertain'])}.** The "
+            "contribution interval spans zero, so the data does not establish "
+            "the sign. A positive point estimate is not evidence the segment "
+            "pays — the honest next step is a controlled test, not a rollout."
+        )
     st.warning(
         "**Why revenue alone would have misled you:** the subsidy scales with "
         "how many people *order*, not how much they spend. High-spend customers "

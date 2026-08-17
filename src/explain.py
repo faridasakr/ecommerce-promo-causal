@@ -57,6 +57,12 @@ higher-spending customers.
 causal number to a decision-maker.
 6. Use dollars and percentages from the summary verbatim. Do not recompute, \
 extrapolate, or round differently.
+7. Segment targeting verdicts are INTERVAL-based and appear verbatim in \
+recommendation.verdicts. Report a segment's verdict as written. Never upgrade \
+"economically uncertain; recommend a controlled test" into a recommendation to \
+target, however positive that segment's point estimate looks -- an interval \
+spanning zero means the data cannot resolve the sign, and a controlled test is \
+the recommended next step.
 
 Write for a business stakeholder: short paragraphs, no jargon without a gloss."""
 

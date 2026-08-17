@@ -349,6 +349,82 @@ def test_joint_bootstrap_reflects_both_sources_of_uncertainty(data):
     assert -1.0 <= row["corr_ate_rate"] <= 1.0
 
 
+@pytest.mark.parametrize(
+    "lo,hi,expected",
+    [
+        (0.10, 0.90, economics.VERDICT_TARGET),
+        (-0.90, -0.10, economics.VERDICT_DESTROYS),
+        (-0.20, 0.60, economics.VERDICT_UNCERTAIN),   # positive point estimate!
+        (0.00, 0.60, economics.VERDICT_UNCERTAIN),    # touching zero is not above it
+        (-0.60, 0.00, economics.VERDICT_UNCERTAIN),
+        (np.nan, np.nan, economics.VERDICT_UNCERTAIN),  # no interval = no evidence
+    ],
+)
+def test_verdict_is_interval_based(lo, hi, expected):
+    assert economics.verdict_from_interval(lo, hi) == expected
+
+
+def test_positive_point_estimate_spanning_zero_is_not_a_recommendation():
+    """The regression this rule exists to prevent.
+
+    A segment with a clearly positive point estimate whose interval spans zero
+    must NOT be recommended for targeting. Keying the decision off
+    `net_contribution > 0` would have promoted it silently.
+    """
+    hte = pd.DataFrame({"segment": ["mid spend"], "ate": [7.0],
+                        "ci_low": [0.0], "ci_high": [14.0]})
+    econ = economics.segment_economics(
+        hte, {"mid spend": 0.45},
+        contribution_ci={"mid spend": (-0.20, 0.60)},
+    )
+    row = econ.iloc[0]
+
+    assert row["net_contribution"] > 0, "fixture should have a positive point estimate"
+    assert row["profitable"], "the boolean still reports the point estimate"
+    assert row["verdict"] == economics.VERDICT_UNCERTAIN
+
+    rec = economics.recommendation(econ)
+    assert rec["segments_evidence_supports_targeting"] == []
+    assert rec["segments_economically_uncertain"] == ["mid spend"]
+    assert "controlled test" in rec["decision"]
+    assert "Target the promotion at" not in rec["decision"], (
+        "a segment whose interval spans zero must not be recommended for "
+        "targeting just because its point estimate is positive"
+    )
+
+
+def test_decision_string_covers_all_three_verdicts():
+    """Every segment's verdict must reach the decision string verbatim."""
+    hte = pd.DataFrame({
+        "segment": ["low spend", "mid spend", "high spend"],
+        "ate": [8.0, 7.0, 4.0],
+        "ci_low": [7.0, 6.0, 3.0], "ci_high": [9.0, 8.0, 5.0],
+    })
+    econ = economics.segment_economics(
+        hte, {"low spend": 0.35, "mid spend": 0.45, "high spend": 0.60},
+        contribution_ci={
+            "low spend": (0.9, 1.5),
+            "mid spend": (-0.3, 0.6),
+            "high spend": (-2.5, -1.4),
+        },
+    )
+    verdicts = dict(zip(econ["segment"], econ["verdict"]))
+    assert verdicts["low spend"] == economics.VERDICT_TARGET
+    assert verdicts["mid spend"] == economics.VERDICT_UNCERTAIN
+    assert verdicts["high spend"] == economics.VERDICT_DESTROYS
+
+    rec = economics.recommendation(econ)
+    assert "Target the promotion at: low spend." in rec["decision"]
+    assert "Withhold it from: high spend." in rec["decision"]
+    assert "controlled test before deciding on: mid spend." in rec["decision"]
+    assert rec["verdicts"] == verdicts
+
+    # Targeted-offer economics must count only evidence-supported segments.
+    assert rec["net_contribution_targeted_offer"] == pytest.approx(
+        econ.loc[econ["segment"] == "low spend", "net_contribution"].item(), abs=0.01
+    )
+
+
 def test_economics_reports_breakeven_and_caveats():
     hte = pd.DataFrame({"segment": ["low spend"], "ate": [8.0], "ci_low": [7.2], "ci_high": [8.2]})
     econ = economics.segment_economics(hte, {"low spend": 0.40})
@@ -556,6 +632,15 @@ def test_readme_decision_table_matches_economics(results_present):
         seen.add(seg)
         rev, profit, subsidy, net = (_num(c) for c in cells[1:5])
         ci_low, ci_high = _pair(cells[5])
+
+        # The verdict must appear VERBATIM, not paraphrased. "Marginally
+        # profitable" and "evidence supports targeting" are different claims,
+        # and the whole point of the three-way rule is that every surface says
+        # the same thing.
+        assert row["verdict"] in cells[6], (
+            f"{seg}: README verdict cell {cells[6]!r} does not contain the "
+            f"pipeline's verdict {row['verdict']!r} verbatim"
+        )
 
         assert abs(rev - row["incremental_revenue"]) <= TOL, f"{seg} incremental revenue"
         assert abs(profit - row["gross_profit"]) <= TOL, f"{seg} gross profit"

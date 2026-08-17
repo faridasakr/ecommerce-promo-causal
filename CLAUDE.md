@@ -8,7 +8,7 @@ A causal study of an e-commerce free-shipping promotion, built on synthetic data
 
 The headline result: a naive difference in means says the promo drove **$23.03** per customer; cross-fitted AIPW says **$6.42** (95% CI $5.98–$7.16); the planted truth is **$5.87**. A 3.6× overstatement, driven entirely by self-selection into the promo.
 
-The project then carries that estimate through to a business decision — netting revenue against gross margin and shipping subsidy — which **flips the ranking**: clearly profitable for low-spend, marginally profitable for mid-spend, loss-making for high-spend.
+The project then carries that estimate through to a business decision — netting revenue against gross margin and shipping subsidy — which **flips the ranking**. Verdicts are interval-based: evidence supports targeting low- and mid-spend; evidence suggests high-spend destroys contribution.
 
 ## Commands
 
@@ -100,4 +100,6 @@ The two estimates correlate +0.88 / +0.58 / +0.34 (low/mid/high). Because contri
 
 All four columns are in contribution_bootstrap.csv, so the correction is checkable rather than asserted. Do not assume adding a second uncertainty source widens an interval — for a difference with correlated terms it narrows.
 
-All three segments now have sign_is_certain=True. Mid-spend's crossing is stable, not bootstrap noise — across seeds 0/1/2 at 50 and 150 replicates the lower bound stays in [+0.03, +0.11] and never reaches zero. But it clears break-even by cents: mid flips negative if shipping exceeds $7.06 (vs $6.50 assumed) or margin falls below 41.4% (vs 45%). Those are illustrative placeholders, so mid-spend is assumption-limited, not data-limited. Do not describe it as resolved without that caveat.
+Targeting is INTERVAL-based, not point-estimate based: `economics.verdict_from_interval` maps CI lower>0 -> "evidence supports targeting", upper<0 -> "evidence suggests this segment destroys contribution", spans 0 -> "economically uncertain; recommend a controlled test". `recommendation()` keys off that verdict; the `profitable` boolean is a point-estimate fact that is still reported but no longer drives the decision. The three strings are emitted VERBATIM in the README table, the app's decision tab, and summary.json — a test fails if the README paraphrases them.
+
+All three segments currently have sign_is_certain=True. Mid-spend's crossing is stable, not bootstrap noise — across seeds 0/1/2 at 50 and 150 replicates the lower bound stays in [+0.03, +0.11] and never reaches zero. But it clears break-even by cents: mid flips negative if shipping exceeds $7.06 (vs $6.50 assumed) or margin falls below 41.4% (vs 45%). Those are illustrative placeholders, so mid-spend is assumption-limited, not data-limited. Do not describe it as resolved without that caveat.

@@ -31,6 +31,38 @@ import numpy as np
 import pandas as pd
 
 
+# ---------------------------------------------------------------------------
+# The targeting rule is INTERVAL-based, not point-estimate based.
+#
+# A positive point estimate whose interval spans zero is not evidence that a
+# segment pays: it is evidence that the data cannot tell. Keying the decision
+# off `net_contribution > 0` silently promotes such a segment to "target it",
+# which is precisely the overclaim this project exists to avoid. These three
+# verdicts are emitted verbatim wherever the decision is reported, so the
+# README, the app and the stakeholder summary cannot drift from each other or
+# soften the wording independently.
+# ---------------------------------------------------------------------------
+VERDICT_TARGET = "evidence supports targeting"
+VERDICT_DESTROYS = "evidence suggests this segment destroys contribution"
+VERDICT_UNCERTAIN = "economically uncertain; recommend a controlled test"
+
+
+def verdict_from_interval(ci_low: float, ci_high: float) -> str:
+    """Three-way verdict from a contribution interval.
+
+    A missing interval yields UNCERTAIN: with no interval there is no evidence
+    of a sign, which is the same practical position as an interval spanning
+    zero -- do not act, run a controlled test.
+    """
+    if not (np.isfinite(ci_low) and np.isfinite(ci_high)):
+        return VERDICT_UNCERTAIN
+    if ci_low > 0:
+        return VERDICT_TARGET
+    if ci_high < 0:
+        return VERDICT_DESTROYS
+    return VERDICT_UNCERTAIN
+
+
 @dataclass
 class CostAssumptions:
     """Declared, challengeable, and reported alongside every conclusion."""
@@ -141,6 +173,14 @@ def segment_economics(
                 np.sign(row["net_contribution_low"]) == np.sign(row["net_contribution_high"])
             )
 
+        # Derived from the ROUNDED bounds so the verdict always agrees with the
+        # interval as published. A bound of -0.004 printing as "0.00" must not
+        # be read as strictly negative by the rule but as zero by the reader.
+        row["verdict"] = verdict_from_interval(
+            row.get("net_contribution_low", np.nan),
+            row.get("net_contribution_high", np.nan),
+        )
+
         rows.append(row)
 
     return pd.DataFrame(rows)
@@ -158,25 +198,59 @@ def purchase_rates_by_segment(
 
 
 def recommendation(econ: pd.DataFrame, assumptions: CostAssumptions | None = None) -> dict:
-    """Convert the contribution table into a stated decision with caveats."""
+    """Convert the contribution table into a stated decision with caveats.
+
+    The rule is INTERVAL-based. A segment is recommended only when its whole
+    contribution interval sits above zero -- not when its point estimate is
+    positive. A positive point estimate with an interval spanning zero means
+    the data cannot resolve the sign, and the honest output is a controlled
+    test, not a targeting instruction.
+    """
     a = assumptions or CostAssumptions()
+
+    def by_verdict(v: str) -> list[str]:
+        return econ[econ["verdict"] == v]["segment"].tolist()
+
+    target = by_verdict(VERDICT_TARGET)
+    destroys = by_verdict(VERDICT_DESTROYS)
+    uncertain = by_verdict(VERDICT_UNCERTAIN)
+
+    # `profitable` remains a point-estimate fact and is still reported, but it
+    # no longer drives the decision.
     profitable = econ[econ["profitable"]]["segment"].tolist()
     unprofitable = econ[~econ["profitable"]]["segment"].tolist()
 
     blanket_net = float(econ["net_contribution"].mean())
-    targeted_net = float(econ[econ["profitable"]]["net_contribution"].mean()) if profitable else 0.0
-
-    uncertain = (
-        econ[econ.get("sign_is_certain", True) == False]["segment"].tolist()  # noqa: E712
-        if "sign_is_certain" in econ.columns
-        else []
+    targeted_net = (
+        float(econ[econ["verdict"] == VERDICT_TARGET]["net_contribution"].mean())
+        if target
+        else 0.0
     )
 
+    parts = []
+    if target:
+        parts.append(f"Target the promotion at: {', '.join(target)}.")
+    if destroys:
+        parts.append(f"Withhold it from: {', '.join(destroys)}.")
+    if uncertain:
+        parts.append(
+            f"Run a controlled test before deciding on: {', '.join(uncertain)}."
+        )
+    if not parts:
+        parts.append("Do not re-run the promotion as structured.")
+
     return {
-        "decision": (
-            f"Target the promotion at: {', '.join(profitable)}."
-            if profitable
-            else "Do not re-run the promotion as structured."
+        "decision": " ".join(parts),
+        "verdicts": dict(zip(econ["segment"], econ["verdict"])),
+        "segments_evidence_supports_targeting": target,
+        "segments_evidence_says_destroy_contribution": destroys,
+        "segments_economically_uncertain": uncertain,
+        "decision_rule": (
+            "Interval-based: a segment is recommended only if the whole 95% "
+            "contribution interval lies above zero, withheld only if it lies "
+            "entirely below zero, and otherwise reported as economically "
+            "uncertain. A positive point estimate whose interval spans zero is "
+            "not evidence that the segment pays."
         ),
         "profitable_segments": profitable,
         "unprofitable_segments": unprofitable,

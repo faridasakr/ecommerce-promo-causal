@@ -10,11 +10,21 @@
 
 | Segment | Incremental revenue | Gross profit @45% | Shipping subsidy | **Net contribution** | 95% CI | Verdict |
 |---|---:|---:|---:|---:|---:|---|
-| Low spend | $7.98 | $3.59 | −$2.30 | **+$1.29** | [+1.05, +1.43] | Profitable ✅ |
-| Mid spend | $7.12 | $3.21 | −$2.95 | **+$0.25** | [+0.06, +0.58] | **Marginally profitable** ⚠️ |
-| High spend | $4.01 | $1.81 | −$3.89 | **−$2.09** | [−2.37, −1.39] | Loss-making ❌ |
+| Low spend | $7.98 | $3.59 | −$2.30 | **+$1.29** | [+1.05, +1.43] | ✅ evidence supports targeting |
+| Mid spend | $7.12 | $3.21 | −$2.95 | **+$0.25** | [+0.06, +0.58] | ✅ evidence supports targeting |
+| High spend | $4.01 | $1.81 | −$3.89 | **−$2.09** | [−2.37, −1.39] | ❌ evidence suggests this segment destroys contribution |
 
 **Recommendation: target the promotion at low-spend and mid-spend customers, and withhold it from high-spend. Mid-spend clears break-even by only six cents at the lower bound, and its verdict is hostage to the cost assumptions rather than to the statistics — see below before acting on it.**
+
+**The verdict column is a rule, not a judgement call.** It reads the contribution interval, not the point estimate:
+
+| Interval | Verdict |
+|---|---|
+| Lower bound > 0 | evidence supports targeting |
+| Upper bound < 0 | evidence suggests this segment destroys contribution |
+| Spans 0 | economically uncertain; recommend a controlled test |
+
+A positive point estimate whose interval spans zero is not evidence that a segment pays — it is evidence that the data cannot tell. Keying the decision off `net_contribution > 0` would quietly promote such a segment to "target it", which is the overclaim this whole project is a warning about. Earlier in this analysis mid-spend sat at exactly that point: a **+$0.25** point estimate with an interval of [−0.02, +0.57]. The rule would have called it *economically uncertain* and asked for a controlled test; a point-estimate rule would have shipped it. The same three strings are emitted verbatim by the pipeline, the Streamlit app, and the LLM stakeholder layer, so no surface can soften the wording independently.
 
 The subsidy scales with how many people *order*, not how much they spend. High-spend customers order more often, so you pay shipping on many purchases that would have happened anyway — which is how a segment can generate real incremental revenue and still lose money.
 

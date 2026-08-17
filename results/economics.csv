@@ -1,4 +1,4 @@
-segment,incremental_revenue,gross_profit,shipping_subsidy,net_contribution,profitable,breakeven_shipping_cost,breakeven_gross_margin,causal_purchase_rate,observed_treated_rate,rate_confounding_gap,subsidy_if_observed_rate,net_contribution_low,net_contribution_high,ci_source,sign_is_certain
-low spend,7.98,3.59,-2.3,1.29,True,10.14,0.288,0.354,0.402,0.048,-2.62,1.05,1.43,joint bootstrap (revenue + incidence),True
-mid spend,7.12,3.21,-2.95,0.25,True,7.06,0.414,0.454,0.5,0.046,-3.25,0.06,0.58,joint bootstrap (revenue + incidence),True
-high spend,4.01,1.81,-3.89,-2.09,False,3.01,0.97,0.599,0.633,0.034,-4.11,-2.37,-1.39,joint bootstrap (revenue + incidence),True
+segment,incremental_revenue,gross_profit,shipping_subsidy,net_contribution,profitable,breakeven_shipping_cost,breakeven_gross_margin,causal_purchase_rate,observed_treated_rate,rate_confounding_gap,subsidy_if_observed_rate,net_contribution_low,net_contribution_high,ci_source,sign_is_certain,verdict
+low spend,7.98,3.59,-2.3,1.29,True,10.14,0.288,0.354,0.402,0.048,-2.62,1.05,1.43,joint bootstrap (revenue + incidence),True,evidence supports targeting
+mid spend,7.12,3.21,-2.95,0.25,True,7.06,0.414,0.454,0.5,0.046,-3.25,0.06,0.58,joint bootstrap (revenue + incidence),True,evidence supports targeting
+high spend,4.01,1.81,-3.89,-2.09,False,3.01,0.97,0.599,0.633,0.034,-4.11,-2.37,-1.39,joint bootstrap (revenue + incidence),True,evidence suggests this segment destroys contribution

@@ -139,11 +139,14 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
     print(f"  assuming {assumptions.gross_margin:.0%} gross margin, "
           f"${assumptions.shipping_cost_per_order:.2f}/order shipping cost")
     for _, r in econ.iterrows():
-        flag = "PROFITABLE" if r["profitable"] else "LOSS-MAKING"
+        ci = (f"[{r['net_contribution_low']:>6.2f}, {r['net_contribution_high']:>6.2f}]"
+              if np.isfinite(r.get("net_contribution_low", np.nan)) else "")
         print(f"  {r['segment']:<12} rev ${r['incremental_revenue']:>5.2f} "
               f"-> profit ${r['gross_profit']:>5.2f} "
               f"- subsidy ${abs(r['shipping_subsidy']):>5.2f} "
-              f"= ${r['net_contribution']:>6.2f}  {flag}")
+              f"= ${r['net_contribution']:>6.2f} {ci}")
+        # The verdict is emitted verbatim -- never paraphrased per surface.
+        print(f"  {'':<12} -> {r['verdict']}")
     rec = economics.recommendation(econ, assumptions)
     print(f"\n  >>> {rec['decision']}")
 
