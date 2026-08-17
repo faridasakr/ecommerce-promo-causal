@@ -311,11 +311,17 @@ def segment_contribution_bootstrap(
         # two cancels variance rather than adding it: composing independent
         # bootstraps would overstate the interval. Recorded so the direction of
         # the correction is auditable rather than asserted.
-        corr = (
-            float(np.corrcoef(ate_draws, rate_draws)[0, 1])
-            if len(net_draws) >= 20
-            else np.nan
-        )
+        if len(net_draws) >= 20:
+            a_arr = np.asarray(ate_draws) * gross_margin
+            r_arr = np.asarray(rate_draws) * shipping_cost_per_order
+            corr = float(np.corrcoef(ate_draws, rate_draws)[0, 1])
+            sd_joint = float(np.std(net_draws))
+            # What the two discarded shortcuts would have produced, so the size
+            # AND direction of the correction are checkable from the artefact.
+            sd_revenue_only = float(np.std(a_arr))
+            sd_if_independent = float(np.sqrt(np.var(a_arr) + np.var(r_arr)))
+        else:
+            corr = sd_joint = sd_revenue_only = sd_if_independent = np.nan
 
         rows.append({
             "segment": label,
@@ -326,6 +332,9 @@ def segment_contribution_bootstrap(
             "net_contribution_low": net_lo,
             "net_contribution_high": net_hi,
             "corr_ate_rate": corr,
+            "sd_net_joint": sd_joint,
+            "sd_net_revenue_only": sd_revenue_only,
+            "sd_net_if_independent": sd_if_independent,
             "n_draws": len(net_draws),
         })
 

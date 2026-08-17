@@ -471,17 +471,33 @@ def _pair(cell: str) -> tuple[float, float]:
     return _num(lo), _num(hi)
 
 
-def _table_rows() -> list[list[str]]:
-    """Every markdown table row in the README, as stripped cell lists."""
-    rows = []
+def _table_rows() -> list[tuple[str, list[str]]]:
+    """Every markdown table data row, paired with its own table's header text.
+
+    Several tables are keyed by segment name, and they no longer differ
+    reliably in width, so callers must dispatch on the header rather than on
+    cell count. Returns (header_text_lowercased, cells) per data row; the
+    header row itself is not emitted.
+    """
+    rows: list[tuple[str, list[str]]] = []
+    header: str | None = None
+    prev: list[str] | None = None
+
     for line in README.read_text().splitlines():
         line = line.strip()
         if not line.startswith("|"):
+            header, prev = None, None  # table ended
             continue
         cells = [c.strip() for c in line.strip("|").split("|")]
         if all(set(c) <= set("-: ") for c in cells):
-            continue  # separator row
-        rows.append(cells)
+            # The row immediately above a separator is the header.
+            header = " | ".join(prev).lower() if prev else ""
+            prev = None
+            continue
+        if header is not None:
+            rows.append((header, cells))
+        prev = cells
+
     return rows
 
 
@@ -498,16 +514,19 @@ def test_readme_decision_table_matches_economics(results_present):
     econ = pd.read_csv(RESULTS / "economics.csv").set_index("segment")
     seen = set()
 
-    for cells in _table_rows():
+    boot = pd.read_csv(RESULTS / "contribution_bootstrap.csv").set_index("segment")
+
+    for header, cells in _table_rows():
         seg = cells[0].lower()
         if seg not in econ.index:
             continue
         row = econ.loc[seg]
 
-        # Two tables key off segment names: the 7-column decision table and the
-        # 4-column observed-vs-causal rate table. Dispatch on shape so adding a
-        # segment-keyed table never silently unpacks into the wrong columns.
-        if len(cells) == 4:
+        # Three tables are keyed by segment and two of them are the same width,
+        # so dispatch on the header. Anything segment-keyed that this does not
+        # recognise is a failure, not a skip -- an unvalidated numeric table is
+        # exactly how the README drifts.
+        if "causal rate" in header:
             obs, causal, gap = (_num(c) for c in cells[1:4])
             assert abs(obs - row["observed_treated_rate"]) <= RATE_TOL, f"{seg} observed rate"
             assert abs(causal - row["causal_purchase_rate"]) <= RATE_TOL, f"{seg} causal rate"
@@ -517,8 +536,22 @@ def test_readme_decision_table_matches_economics(results_present):
             assert abs(abs(gap) - abs(row["rate_confounding_gap"])) <= RATE_TOL, f"{seg} gap size"
             continue
 
-        assert len(cells) == 7, (
-            f"unexpected segment-keyed table row with {len(cells)} cells: {cells}"
+        if "joint (correct)" in header:
+            b = boot.loc[seg]
+            corr, rev_only, indep, joint = (_num(c) for c in cells[1:5])
+            assert abs(corr - b["corr_ate_rate"]) <= 0.01, f"{seg} correlation"
+            assert abs(rev_only - b["sd_net_revenue_only"]) <= 0.01, f"{seg} sd revenue-only"
+            assert abs(indep - b["sd_net_if_independent"]) <= 0.01, f"{seg} sd if independent"
+            assert abs(joint - b["sd_net_joint"]) <= 0.01, f"{seg} sd joint"
+            # The claim the surrounding prose rests on: joint is the tightest.
+            assert joint < rev_only and joint < indep, (
+                f"{seg}: the joint sd must be the smallest of the three, "
+                f"otherwise the README's explanation of why is wrong"
+            )
+            continue
+
+        assert "net contribution" in header, (
+            f"segment-keyed table with an unrecognised header is unvalidated: {header!r}"
         )
         seen.add(seg)
         rev, profit, subsidy, net = (_num(c) for c in cells[1:5])
@@ -539,7 +572,7 @@ def test_readme_estimator_table_matches_estimates(results_present):
     est = pd.read_csv(RESULTS / "estimates.csv").set_index("estimator")
     seen = set()
 
-    for cells in _table_rows():
+    for _header, cells in _table_rows():
         name = cells[0].replace("**", "").strip()
         if name not in est.index:
             continue

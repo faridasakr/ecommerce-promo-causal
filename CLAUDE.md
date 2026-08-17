@@ -8,7 +8,7 @@ A causal study of an e-commerce free-shipping promotion, built on synthetic data
 
 The headline result: a naive difference in means says the promo drove **$23.03** per customer; cross-fitted AIPW says **$6.42** (95% CI $5.98–$7.16); the planted truth is **$5.87**. A 3.6× overstatement, driven entirely by self-selection into the promo.
 
-The project then carries that estimate through to a business decision — netting revenue against gross margin and shipping subsidy — which **flips the ranking**: profitable for low-spend customers, loss-making for high-spend, statistically unresolvable for mid-spend.
+The project then carries that estimate through to a business decision — netting revenue against gross margin and shipping subsidy — which **flips the ranking**: clearly profitable for low-spend, marginally profitable for mid-spend, loss-making for high-spend.
 
 ## Commands
 
@@ -84,8 +84,20 @@ Balance: worst \|SMD\| 0.660 → 0.007 (logistic), 0.042 (cross-fitted GBM).
 
 Intervals containing their target: 1 of 3 in this realization (naive has no causal target; PSM has no valid bootstrap interval). Report this as a count for this sample, never as a coverage *rate* — a rate is a property of the procedure under repeated sampling and would need a simulation study. "Under-coverage" is the wrong word and must not reappear.
 
-Segment contribution: low +$1.29 [+0.91, +1.45], mid +$0.25 [−0.02, +0.57], high −$2.09 [−2.67, −1.49].
+Segment contribution: low +$1.29 [+1.05, +1.43], mid +$0.25 [+0.06, +0.58], high −$2.09 [−2.37, −1.39].
 
 The subsidy multiplier is the CAUSAL incidence P(purchase | do(T=1)) per segment (0.354 / 0.454 / 0.599), not the observed treated rate (0.402 / 0.500 / 0.633). The observed rate is confounded and runs 3-5pp high; using it reintroduces selection bias on the cost side. Both are reported in economics.csv.
 
-Mid-spend's point estimate is positive but its interval still straddles zero (sign_is_certain=False), so it remains unresolvable — the flip from -$0.04 to +$0.25 changed the point estimate, not the verdict.
+Contribution intervals come from a JOINT bootstrap: each replicate resamples a segment once and re-runs revenue ATE -> P(purchase | do(T=1)) -> net contribution, then percentiles are taken over the contribution draws. Never compose two separately-bootstrapped quantities.
+
+The two estimates correlate +0.88 / +0.58 / +0.34 (low/mid/high). Because contribution is a *difference* (margin x revenue - shipping x rate), that POSITIVE correlation cancels variance rather than adding it — so the correct interval is NARROWER, and the error from a shortcut scales with the correlation:
+
+| Segment | corr | sd revenue-only | sd if independent | sd joint |
+|---|---:|---:|---:|---:|
+| low | +0.88 | 0.148 (+60%) | 0.164 (+77%) | 0.092 |
+| mid | +0.58 | 0.158 (+18%) | 0.167 (+25%) | 0.134 |
+| high | +0.34 | 0.295 (+4%) | 0.298 (+5%) | 0.284 |
+
+All four columns are in contribution_bootstrap.csv, so the correction is checkable rather than asserted. Do not assume adding a second uncertainty source widens an interval — for a difference with correlated terms it narrows.
+
+All three segments now have sign_is_certain=True. Mid-spend's crossing is stable, not bootstrap noise — across seeds 0/1/2 at 50 and 150 replicates the lower bound stays in [+0.03, +0.11] and never reaches zero. But it clears break-even by cents: mid flips negative if shipping exceeds $7.06 (vs $6.50 assumed) or margin falls below 41.4% (vs 45%). Those are illustrative placeholders, so mid-spend is assumption-limited, not data-limited. Do not describe it as resolved without that caveat.

@@ -75,8 +75,9 @@
       "observed_treated_rate": 0.402,
       "rate_confounding_gap": 0.048,
       "subsidy_if_observed_rate": -2.62,
-      "net_contribution_low": 0.91,
-      "net_contribution_high": 1.45,
+      "net_contribution_low": 1.05,
+      "net_contribution_high": 1.43,
+      "ci_source": "joint bootstrap (revenue + incidence)",
       "sign_is_certain": true
     },
     {
@@ -92,9 +93,10 @@
       "observed_treated_rate": 0.5,
       "rate_confounding_gap": 0.046,
       "subsidy_if_observed_rate": -3.25,
-      "net_contribution_low": -0.02,
-      "net_contribution_high": 0.57,
-      "sign_is_certain": false
+      "net_contribution_low": 0.06,
+      "net_contribution_high": 0.58,
+      "ci_source": "joint bootstrap (revenue + incidence)",
+      "sign_is_certain": true
     },
     {
       "segment": "high spend",
@@ -109,8 +111,9 @@
       "observed_treated_rate": 0.633,
       "rate_confounding_gap": 0.034,
       "subsidy_if_observed_rate": -4.11,
-      "net_contribution_low": -2.67,
-      "net_contribution_high": -1.49,
+      "net_contribution_low": -2.37,
+      "net_contribution_high": -1.39,
+      "ci_source": "joint bootstrap (revenue + incidence)",
       "sign_is_certain": true
     }
   ],
@@ -125,9 +128,7 @@
     ],
     "net_contribution_blanket_offer": -0.18,
     "net_contribution_targeted_offer": 0.77,
-    "segments_where_sign_is_uncertain": [
-      "mid spend"
-    ],
+    "segments_where_sign_is_uncertain": [],
     "assumptions": {
       "gross_margin": 0.45,
       "shipping_cost_per_order": 6.5,

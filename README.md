@@ -10,15 +10,17 @@
 
 | Segment | Incremental revenue | Gross profit @45% | Shipping subsidy | **Net contribution** | 95% CI | Verdict |
 |---|---:|---:|---:|---:|---:|---|
-| Low spend | $7.98 | $3.59 | −$2.30 | **+$1.29** | [+0.91, +1.45] | Profitable ✅ |
-| Mid spend | $7.12 | $3.21 | −$2.95 | **+$0.25** | [−0.02, +0.57] | **Too close to call** ⚠️ |
-| High spend | $4.01 | $1.81 | −$3.89 | **−$2.09** | [−2.67, −1.49] | Loss-making ❌ |
+| Low spend | $7.98 | $3.59 | −$2.30 | **+$1.29** | [+1.05, +1.43] | Profitable ✅ |
+| Mid spend | $7.12 | $3.21 | −$2.95 | **+$0.25** | [+0.06, +0.58] | **Marginally profitable** ⚠️ |
+| High spend | $4.01 | $1.81 | −$3.89 | **−$2.09** | [−2.37, −1.39] | Loss-making ❌ |
 
-**Recommendation: target the promotion at low-spend customers. Mid-spend still cannot be called — its point estimate is now positive, but the interval straddles zero, so the data does not establish which side of break-even it falls on. High-spend remains clearly loss-making.**
+**Recommendation: target the promotion at low-spend and mid-spend customers, and withhold it from high-spend. Mid-spend clears break-even by only six cents at the lower bound, and its verdict is hostage to the cost assumptions rather than to the statistics — see below before acting on it.**
 
 The subsidy scales with how many people *order*, not how much they spend. High-spend customers order more often, so you pay shipping on many purchases that would have happened anyway — which is how a segment can generate real incremental revenue and still lose money.
 
-Two things a revenue-only analysis would have gotten wrong: it ranks mid-spend ($7.12) as nearly as good as low-spend ($7.98), when in contribution terms one is clearly profitable and the other is indistinguishable from zero; and it makes high-spend look worth subsidising when it destroys $2.09 per customer.
+Two things a revenue-only analysis would have gotten wrong: it ranks mid-spend ($7.12) as nearly as good as low-spend ($7.98), when in contribution terms one clears break-even five times as wide as the other; and it makes high-spend look worth subsidising when it destroys $2.09 per customer.
+
+**What actually decides mid-spend is not the statistics.** Its interval excludes zero, and stably so — re-running the bootstrap across three seeds at 50 and 150 replicates puts the lower bound between +$0.03 and +$0.11, never touching zero. But the segment breaks even at a shipping cost of **$7.06** against the **$6.50** assumed here. An 8.6% error in the carrier rate flips the recommendation; so does a blended margin below 41.4% against the 45% assumed. Both numbers are illustrative placeholders, not finance-sourced. Mid-spend is therefore a decision to make with finance's real figures in hand, not one this analysis settles on its own — which is what the break-even columns in `results/economics.csv` are there to make checkable.
 
 **The subsidy multiplier has to be causal too.** How many orders you subsidise is the purchase rate you would face *if the segment were treated* — P(purchase | do(T=1)) — not the purchase rate observed among customers who chose the promo. Those customers self-selected, and the traits that drove uptake also drive purchasing, so the observed rate runs high:
 
@@ -30,7 +32,19 @@ Two things a revenue-only analysis would have gotten wrong: it ranks mid-spend (
 
 Using the observed rate would have quietly put the selection bias back into the decision — on the *cost* side, after removing it from the revenue side. It inflates the subsidy by 3–5pp of orders, which is $0.22–$0.32 per customer: enough to push mid-spend from marginally positive to marginally negative. The causal rate is estimated by running the same cross-fitted AIPW on a binary purchase indicator, so the cost side gets the same treatment as the revenue side. Both rates are reported in `results/economics.csv` so the correction is auditable rather than asserted.
 
-The causal CIs are propagated through the margin arithmetic rather than discarded at the handoff — which is what surfaces the mid-spend ambiguity instead of hiding it behind a tidy point estimate.
+**The interval comes from one bootstrap of the whole chain, not two composed ones.** The contribution depends on two estimated quantities — the revenue effect and the purchase probability — so each replicate resamples a segment once and re-runs the entire chain on it: revenue ATE → P(purchase | do(T=1)) → net contribution. Percentiles are taken over the contribution draws directly.
+
+That matters because the two estimates are strongly *positively* correlated across replicates. Since contribution is a **difference** — margin × revenue − shipping × rate — positive correlation makes the two terms move together and partially cancel, so the correct interval is **narrower** than either shortcut, and the more correlated the segment, the bigger the gap:
+
+| Segment | corr(revenue, rate) | Revenue CI only | Composed as independent | Joint (correct) |
+|---|---:|---:|---:|---:|
+| Low spend | +0.88 | 0.148 | 0.164 | 0.092 |
+| Mid spend | +0.58 | 0.158 | 0.167 | 0.134 |
+| High spend | +0.34 | 0.295 | 0.298 | 0.284 |
+
+Standard deviation of the net contribution across bootstrap replicates, from `results/contribution_bootstrap.csv`. Holding the rate fixed overstates the spread by **60% / 18% / 4%**; composing two separately-bootstrapped quantities as if independent overstates it by **77% / 25% / 5%**. Both errors scale with the correlation, which is exactly the quantity a composed interval throws away.
+
+Note the direction is not something to reason out in advance. Adding a second source of uncertainty *sounds* like it should widen the interval, and for a sum it would. For a difference with positively correlated terms it narrows. That is why the resampling has to be joint rather than assembled from parts — the covariance is doing real work and only a single resampling of the whole chain captures it.
 
 ## The estimate behind it
 
@@ -174,8 +188,8 @@ Estimation error
 └── estimand drift from trimming            0.24% of sample
 
 Decision-layer error
-├── revenue-optimal ≠ profit-optimal        mid-spend flips from #2 to unresolvable
-├── contribution CI straddles zero          mid-spend: [-0.02, +0.57], no decision possible
+├── revenue-optimal ≠ profit-optimal        high-spend is revenue-positive, contribution-negative
+├── decision hinges on cost assumptions     mid-spend break-even at $7.06 vs $6.50 assumed
 ├── margin/shipping assumptions unverified  break-even columns bound the risk
 └── static analysis ignores LTV             acquisition/retention effects unmodelled
 
