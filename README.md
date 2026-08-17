@@ -199,8 +199,6 @@ Explanation-layer failure
 - Contribution analysis is static: no acquisition, retention, or LTV effects, which would need a longitudinal design.
 - No temporal component — difference-in-differences on pre/post data would identify the effect under weaker assumptions.
 
-> Built with AI assistance (Claude). Every design decision — estimand handling, cross-fitting, the guardrail architecture, the contribution analysis — is one I can defend in detail, and the commit history reflects that collaboration honestly.
-
 ## Setup
 
 ```bash
