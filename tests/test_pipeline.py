@@ -113,6 +113,37 @@ def test_psm_targets_att_not_ate(data):
     assert "true_att" in truth and truth["true_att"] != truth["true_ate"]
 
 
+def test_psm_reports_no_bootstrap_ci(data):
+    """PSM must ship without an interval.
+
+    Abadie & Imbens (2008) show the ordinary nonparametric bootstrap is
+    inconsistent for nearest-neighbour matching with a fixed number of matches:
+    the estimator is not smooth enough, and the failure does not go away with
+    more replicates. An interval here would look like quantified uncertainty
+    while being unfounded -- worse than reporting none.
+    """
+    X, t, y, names, truth = data
+    results = {r.name: r for r in estimators.run_all(X, t, y, n_boot=25, seed=0)}
+
+    psm = results["Propensity score matching"]
+    assert not np.isfinite(psm.ci_low) and not np.isfinite(psm.ci_high), (
+        "PSM must not report a bootstrap CI -- the ordinary bootstrap is "
+        "invalid for fixed-NN matching (Abadie & Imbens 2008)"
+    )
+    assert "Abadie" in psm.ci_note, "the reason for the missing CI must travel with it"
+    assert np.isfinite(psm.ate), "the point estimate should still be reported"
+
+    # The other side of the guard: this must fail if bootstrapping breaks
+    # everywhere, not just for PSM.
+    for name, r in results.items():
+        if name == "Propensity score matching":
+            continue
+        assert np.isfinite(r.ci_low) and np.isfinite(r.ci_high), (
+            f"{name} lost its bootstrap CI -- only PSM should be missing one"
+        )
+        assert r.ci_note == "", f"{name} should carry no CI caveat"
+
+
 # --------------------------------------------------------------- diagnostics
 def test_propensity_scores_are_well_formed(data):
     X, t, y, names, truth = data
@@ -372,9 +403,20 @@ def test_readme_estimator_table_matches_estimates(results_present):
             f"estimator actually used -- trimming and matching change the estimand"
         )
         assert abs(_num(cells[3]) - row["estimate"]) <= TOL, f"{name} estimate"
-        ci_low, ci_high = _pair(cells[4])
-        assert abs(ci_low - row["ci_low"]) <= TOL, f"{name} CI low"
-        assert abs(ci_high - row["ci_high"]) <= TOL, f"{name} CI high"
+
+        # An estimator with no valid interval must show a dash, not a range.
+        if pd.isna(row["ci_low"]):
+            assert _is_dash(cells[4]), (
+                f"{name} has no CI in estimates.csv, so the README must show a "
+                f"dash, not {cells[4]!r}"
+            )
+        else:
+            assert not _is_dash(cells[4]), (
+                f"{name} has a CI in estimates.csv but the README shows a dash"
+            )
+            ci_low, ci_high = _pair(cells[4])
+            assert abs(ci_low - row["ci_low"]) <= TOL, f"{name} CI low"
+            assert abs(ci_high - row["ci_high"]) <= TOL, f"{name} CI high"
 
         # An estimator with no causal target must be shown with a dash, not a
         # number. Printing a "true value" for the naive contrast would imply it
@@ -396,3 +438,14 @@ def test_readme_estimator_table_matches_estimates(results_present):
             assert abs(_num(cells[6]) - row["abs_pct_error"]) <= PCT_TOL, f"{name} error pct"
 
     assert seen == set(est.index), f"README is missing estimators: {set(est.index) - seen}"
+
+    # A withheld interval must be explained where a reader will see it. The
+    # citation is the load-bearing part -- "no CI" without a reason reads as an
+    # omission rather than a deliberate methodological choice.
+    prose = README.read_text()
+    if (est["ci_note"].fillna("") != "").any():
+        assert "Abadie" in prose, (
+            "estimates.csv withholds a CI with a stated reason, but the README "
+            "never explains it -- a missing interval needs its justification "
+            "next to the table, not only in the CSV"
+        )

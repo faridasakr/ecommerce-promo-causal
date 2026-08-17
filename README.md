@@ -28,9 +28,11 @@ The causal CIs are propagated through the margin arithmetic rather than discarde
 |---|---|---|---:|---:|---:|---:|
 | Naive difference in means | ATE | full sample | $23.03 | [22.40, 23.57] | — | — |
 | OLS regression adjustment | ATE | full sample | $7.09 | [6.60, 7.73] | $5.87 | +21% |
-| Propensity score matching | **ATT** | **matched treated** | $7.08 | [5.32, 7.76] | **$5.98** | +18% |
+| Propensity score matching | **ATT** | **matched treated** | $7.08 | — | **$5.98** | +18% |
 | IPW (stabilised) | ATE | trimmed (logistic) | $6.38 | [5.68, 7.27] | $5.87 | +9% |
 | **AIPW (cross-fitted, doubly robust)** | ATE | trimmed (cross-fit) | **$6.42** | [5.98, 7.16] | $5.87 | +9% |
+
+**PSM has no confidence interval on purpose.** The ordinary nonparametric bootstrap is *invalid* for nearest-neighbour matching with a fixed number of matches — Abadie & Imbens (2008), "On the Failure of the Bootstrap for Matching Estimators". The estimator is not smooth enough for the bootstrap to be consistent, and the failure is asymptotic: more replicates do not fix it. Reporting an interval anyway would look like quantified uncertainty while resting on nothing, which is worse than reporting none. The point estimate stays — matching is still a useful classical baseline — and the interval is simply withheld with the reason attached.
 
 The **estimated causal effect** is **$6.42 per customer** (95% CI $5.98–$7.16), under conditional exchangeability, positivity, and SUTVA. Because this is synthetic data, the planted truth is known to be **$5.87** — on real data that column would not exist, which is precisely why the diagnostics and stated assumptions carry the weight.
 
@@ -50,7 +52,7 @@ A policy question about extending the promo to everyone needs the ATE; a questio
 
 That is not a bug. Bootstrap intervals quantify *sampling variability*: how much the estimate would move if you redrew the sample. They say nothing about *model misspecification* — systematic bias from a propensity model that doesn't capture the true assignment mechanism. So a tight interval around a slightly biased estimate is exactly what you should expect, and exactly what a stakeholder will misread as precision.
 
-Only 2 of the 4 intervals with a causal target contain it. Any analysis that reports a CI as though it bounds total error is making this mistake.
+Only 1 of the 3 remaining intervals contains its target. Any analysis that reports a CI as though it bounds total error is making this mistake.
 
 ---
 
@@ -154,7 +156,7 @@ Estimation error
 ├── selection bias, unadjusted            +$17.17  (naive estimator)
 ├── residual bias after adjustment         +$0.51 to +$1.22
 │   └── driven by unmodelled effect heterogeneity in the propensity model
-├── CI under-coverage                       2 of 4 scored intervals exclude their target
+├── CI under-coverage                       2 of 3 scored intervals exclude their target
 │   └── incl. AIPW: 9% point error, yet its CI misses
 │   └── bootstrap CIs capture sampling noise, not model bias  ← see "the lesson"
 └── estimand drift from trimming            0.24% of sample

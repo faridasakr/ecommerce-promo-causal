@@ -74,13 +74,13 @@ If a change moves these materially, investigate before accepting:
 |---|---|---|---:|---:|---:|
 | Naive | ATE | full sample | 50,000 | 23.03 | — |
 | OLS | ATE | full sample | 50,000 | 7.09 | 5.867 |
-| PSM | ATT | matched treated | 18,664 | 7.08 | 5.980 |
+| PSM | ATT | matched treated | 18,664 | 7.08 (no CI) | 5.980 |
 | IPW | ATE | trimmed (logistic) | 49,879 | 6.38 | 5.869 |
 | AIPW | ATE | trimmed (cross-fit) | 49,972 | 6.42 | 5.868 |
 
 Each truth is the mean of `tau_individual.npy` over the units that estimator used, computed at scoring time. Naive has no causal target and is reported with a dash. The four targets differ only in the third decimal under this DGP — that is a property of the planted effects, not a reason to collapse them back into one column.
 
-Balance: worst \|SMD\| 0.660 → 0.007 (logistic), 0.042 (cross-fitted GBM). CI coverage: 2 of 4 scored (naive excluded).
+Balance: worst \|SMD\| 0.660 → 0.007 (logistic), 0.042 (cross-fitted GBM). CI coverage: 1 of 3 scored (naive has no causal target; PSM has no valid bootstrap interval).
 
 Segment contribution: low +$0.98 [+0.60, +1.14], mid −$0.04 [−0.32, +0.28], high −$2.31 [−2.89, −1.72].
 

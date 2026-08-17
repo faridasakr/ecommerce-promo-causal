@@ -33,6 +33,7 @@ class Estimate:
     ci_low: float = np.nan
     ci_high: float = np.nan
     estimand: str = "ATE"  # "ATE" or "ATT" -- these are NOT the same quantity
+    ci_note: str = ""  # why an interval is absent, when it is
     diagnostics: dict = field(default_factory=dict)
 
     def __str__(self) -> str:
@@ -241,6 +242,21 @@ ESTIMANDS = {
 }
 
 
+# Estimators for which the ordinary nonparametric bootstrap is NOT consistent,
+# and the reason. Abadie & Imbens (2008), "On the Failure of the Bootstrap for
+# Matching Estimators": with a FIXED number of matches, the matching estimator
+# is not sufficiently smooth for the bootstrap to be valid, and the failure is
+# asymptotic -- more replicates do not fix it. Reporting a bootstrap interval
+# here would look like quantified uncertainty while being unfounded, which is
+# worse than reporting none. The point estimate stands; only the interval goes.
+NO_BOOTSTRAP = {
+    "Propensity score matching": (
+        "not reported — ordinary bootstrap is invalid for fixed-NN matching "
+        "(Abadie & Imbens 2008)"
+    ),
+}
+
+
 # ---------------------------------------------------------------------------
 # Bootstrap
 # ---------------------------------------------------------------------------
@@ -270,7 +286,13 @@ def run_all(X, t, y, n_boot: int = 200, seed: int = 0) -> list[Estimate]:
     results = []
     for name, fn in ESTIMATORS.items():
         point = fn(X, t, y, seed=seed)
-        lo, hi = bootstrap_ci(fn, X, t, y, n_boot=n_boot, seed=seed)
+        # Estimators in NO_BOOTSTRAP get no interval at all, rather than one
+        # computed and then quietly caveated -- see the note on that mapping.
+        if name in NO_BOOTSTRAP:
+            lo, hi, note = np.nan, np.nan, NO_BOOTSTRAP[name]
+        else:
+            lo, hi = bootstrap_ci(fn, X, t, y, n_boot=n_boot, seed=seed)
+            note = ""
         results.append(
             Estimate(
                 name=name,
@@ -278,6 +300,7 @@ def run_all(X, t, y, n_boot: int = 200, seed: int = 0) -> list[Estimate]:
                 ci_low=lo,
                 ci_high=hi,
                 estimand=ESTIMANDS[name],
+                ci_note=note,
             )
         )
     return results

@@ -171,6 +171,7 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
                 "estimate": round(r.ate, 3),
                 "ci_low": round(r.ci_low, 3),
                 "ci_high": round(r.ci_high, 3),
+                "ci_note": r.ci_note,
                 "true_value": None if target is None else round(target, 3),
                 "bias": None if bias is None else round(bias, 3),
                 "abs_pct_error": None if pct is None else round(pct, 1),
@@ -180,11 +181,14 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
     est_df = pd.DataFrame(rows)
     est_df.to_csv(RESULTS / "estimates.csv", index=False)
 
-    display = est_df.copy()
-    for col in ("true_value", "bias", "abs_pct_error", "ci_covers_truth"):
+    display = est_df.drop(columns=["ci_note"]).copy()
+    for col in ("ci_low", "ci_high", "true_value", "bias", "abs_pct_error",
+                "ci_covers_truth"):
         # pd.isna, not `is None`: pandas coerces None to NaN in numeric columns.
         display[col] = display[col].map(lambda v: "—" if pd.isna(v) else v)
     print(display.to_string(index=False))
+    for note in est_df.loc[est_df["ci_note"] != "", "ci_note"].unique():
+        print(f"  note: {note}")
 
     headline = est_df[est_df["estimator"].str.startswith("AIPW")].iloc[0]
     naive = est_df.iloc[0]
@@ -250,7 +254,9 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
     with open(RESULTS / "summary.json", "w") as f:
         json.dump(summary, f, indent=2)
 
-    scored = est_df[est_df["true_value"].notna()]
+    # Coverage is only meaningful where an interval exists AND has a target to
+    # cover: naive has no causal target, PSM has no valid bootstrap interval.
+    scored = est_df[est_df["true_value"].notna() & est_df["ci_low"].notna()]
     n_covering = int(scored["ci_covers_truth"].sum())
     print("\n" + "=" * 72)
     print(f"ESTIMATED CAUSAL EFFECT: ${headline['estimate']:.2f} per customer "
@@ -260,7 +266,7 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
           f"({summary['overstatement_factor']}x overstatement)")
     print(f"  planted truth (synthetic data): ${truth['true_ate']:.2f}")
     print(f"  CI coverage: {n_covering}/{len(scored)} intervals contain their target "
-          f"(naive excluded: no causal target)")
+          f"(naive has no causal target; PSM has no valid bootstrap interval)")
     print(f"\nDECISION: {rec['decision']}")
     print("=" * 72)
     print(f"\nArtefacts written to {RESULTS}/")
