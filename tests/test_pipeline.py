@@ -500,6 +500,160 @@ def test_system_prompt_requires_refusal_and_intervals():
     assert "never give" in low and "point estimate" in low
 
 
+# ------------------------------------------------ negative control: region
+def test_region_is_a_clean_negative_control_in_the_dgp(full_data):
+    """Region must have no planted effect modification, or it is not a control.
+
+    This checks the premise the negative control rests on. If the DGP ever
+    starts routing region into the treatment or outcome model, the control
+    stops being valid and the README's claim becomes false.
+    """
+    import generate_data as gd
+
+    source = (SRC / "generate_data.py").read_text()
+    # Region must not appear in either structural equation.
+    for block in ("logit_p = (", "log_mu0 = ("):
+        start = source.index(block)
+        body = source[start:source.index(")", start)]
+        assert "region" not in body.lower(), (
+            f"region enters {block.strip('= (')} -- it is no longer a valid "
+            f"negative control and the README claim must change"
+        )
+
+
+@pytest.mark.slow
+def test_region_differences_are_not_material_but_spend_differences_are(full_data):
+    """The pipeline must not manufacture MATERIAL segment differences.
+
+    Raw spread is the wrong criterion: each region still carries estimation
+    noise, so the point estimates fan out even where nothing is planted. What
+    distinguishes signal from noise is whether the intervals separate. Every
+    pair of regions should overlap -- no region is distinguishable from
+    another -- while low- and high-spend, where effect modification IS planted,
+    should not overlap at all.
+    """
+    X, t, y, names, truth = full_data
+    df = prepare.load(verbose=False)
+
+    spend = df["prior_12w_spend"].to_numpy()
+    cuts = np.quantile(spend, [1 / 3, 2 / 3])
+    spend_hte = diagnostics.heterogeneous_effects(
+        X, t, y, np.digitize(spend, cuts), ["low", "mid", "high"],
+        seed=0, n_boot=30,
+    )
+
+    labels = sorted(df["region"].unique())
+    region_seg = df["region"].map({r: k for k, r in enumerate(labels)}).to_numpy()
+    region_hte = diagnostics.heterogeneous_effects(
+        X, t, y, region_seg, labels, seed=0, n_boot=30,
+    )
+
+    def overlaps(a, b) -> bool:
+        return a["ci_low"] <= b["ci_high"] and b["ci_low"] <= a["ci_high"]
+
+    # Negative control: no pair of regions should separate.
+    rows = [r for _, r in region_hte.iterrows()]
+    for i, a in enumerate(rows):
+        for b in rows[i + 1:]:
+            assert overlaps(a, b), (
+                f"regions {a['segment']} and {b['segment']} have "
+                f"non-overlapping intervals -- the pipeline is finding effect "
+                f"modification where the DGP plants none"
+            )
+
+    # Positive control: the planted modifier should separate.
+    low = spend_hte[spend_hte.segment == "low"].iloc[0]
+    high = spend_hte[spend_hte.segment == "high"].iloc[0]
+    assert not overlaps(low, high), (
+        "low- and high-spend intervals overlap -- the planted effect "
+        "modification is not being recovered, so the negative control proves "
+        "nothing"
+    )
+
+
+# ------------------------------------------------ structured LLM output
+def _valid_payload(summary: dict) -> dict:
+    from explain import _offline_payload
+
+    return _offline_payload("Did it work?", summary)
+
+
+@pytest.fixture(scope="module")
+def stakeholder_summary():
+    path = RESULTS / "stakeholder_summary.json"
+    if not path.exists():
+        pytest.skip("run `make analysis` first")
+    return json.loads(path.read_text())
+
+
+def test_structured_answer_passes_when_fields_match(stakeholder_summary):
+    from explain import render
+
+    out = render(_valid_payload(stakeholder_summary), stakeholder_summary)
+    assert out["rendered"] is True
+    assert out["errors"] == []
+    assert out["answer"]
+
+
+@pytest.mark.parametrize(
+    "field,bad_value,expect_in_error",
+    [
+        ("headline_estimate", 6.40, "headline_estimate"),
+        ("ci", [5.00, 7.16], "ci[0]"),
+        ("segments_to_target", ["high spend"], "segments_to_target"),
+        ("segments_to_withhold", [], "segments_to_withhold"),
+        ("segments_uncertain", ["low spend"], "segments_uncertain"),
+        ("assumptions", ["The promo definitely worked."], "assumptions"),
+        ("limitations", ["None worth mentioning."], "limitations"),
+    ],
+)
+def test_structured_answer_is_withheld_when_a_field_disagrees(
+    stakeholder_summary, field, bad_value, expect_in_error
+):
+    """Prose must never render when a structured claim contradicts the analysis."""
+    from explain import render
+
+    payload = _valid_payload(stakeholder_summary)
+    payload[field] = bad_value
+    out = render(payload, stakeholder_summary)
+
+    assert out["rendered"] is False, f"a wrong {field} still rendered prose"
+    assert out["answer"] is None, "prose leaked despite failed validation"
+    assert any(expect_in_error in e for e in out["errors"]), out["errors"]
+
+
+def test_schema_rejects_unknown_fields(stakeholder_summary):
+    from explain import render
+
+    payload = _valid_payload(stakeholder_summary)
+    payload["confidence"] = "very high"
+    out = render(payload, stakeholder_summary)
+    assert out["rendered"] is False
+    assert any("Schema violation" in e for e in out["errors"])
+
+
+def test_regex_backstop_still_runs_on_the_free_text_field(stakeholder_summary):
+    """Layer 3 must still fire on prose that passes the schema."""
+    from explain import render
+
+    payload = _valid_payload(stakeholder_summary)
+    payload["answer"] = "Paid search drove higher revenue for these customers."
+    out = render(payload, stakeholder_summary)
+
+    assert out["rendered"] is True, "schema fields were fine, so prose renders"
+    assert out["warnings"], "the regex backstop should flag the overclaim"
+    assert any("paid search" in w.lower() for w in out["warnings"])
+
+
+def test_itt_limitation_is_stated_in_the_stakeholder_summary(stakeholder_summary):
+    """The uptake-vs-offer distinction must reach the LLM, not just the README."""
+    blob = " ".join(stakeholder_summary.get("identifying_assumptions", [])).lower()
+    assert "uptake" in blob and "offer" in blob, (
+        "stakeholder_summary.json must state that the estimand is the effect of "
+        "promo uptake, not of being offered the promo"
+    )
+
+
 # ------------------------------------- stakeholder / evaluation artefact split
 def _walk_keys(obj, prefix=""):
     """Every key path in a nested JSON structure."""
@@ -723,6 +877,15 @@ def test_readme_decision_table_matches_economics(results_present):
             assert abs(abs(gap) - abs(row["rate_confounding_gap"])) <= RATE_TOL, f"{seg} gap size"
             continue
 
+        if "prespecified modifier" in header:
+            hte = pd.read_csv(RESULTS / "heterogeneity.csv").set_index("segment")
+            h = hte.loc[seg]
+            assert abs(_num(cells[1]) - h["ate"]) <= TOL, f"{seg} segment ATE"
+            lo, hi = _pair(cells[2])
+            assert abs(lo - h["ci_low"]) <= TOL, f"{seg} segment ATE CI low"
+            assert abs(hi - h["ci_high"]) <= TOL, f"{seg} segment ATE CI high"
+            continue
+
         if "joint (correct)" in header:
             b = boot.loc[seg]
             corr, rev_only, indep, joint = (_num(c) for c in cells[1:5])
@@ -761,6 +924,36 @@ def test_readme_decision_table_matches_economics(results_present):
         assert abs(ci_high - row["net_contribution_high"]) <= TOL, f"{seg} CI high"
 
     assert seen == set(econ.index), f"README is missing segments: {set(econ.index) - seen}"
+
+
+def test_readme_region_table_matches_negative_control(results_present):
+    """The negative-control table must match results/heterogeneity_region.csv.
+
+    Keyed by region name rather than segment name, so it is invisible to the
+    decision-table parser and needs its own check — otherwise the one table
+    whose whole purpose is to be scrutinised would be the one nothing verifies.
+    """
+    path = RESULTS / "heterogeneity_region.csv"
+    if not path.exists():
+        pytest.skip("run `make analysis` first")
+    reg = pd.read_csv(path).set_index("segment")
+    seen = set()
+
+    for header, cells in _table_rows():
+        if "negative control" not in header:
+            continue
+        name = cells[0].strip().lower()
+        assert name in reg.index, f"README lists an unknown region: {name!r}"
+        seen.add(name)
+        row = reg.loc[name]
+        assert abs(_num(cells[1]) - row["ate"]) <= TOL, f"{name} region ATE"
+        lo, hi = _pair(cells[2])
+        assert abs(lo - row["ci_low"]) <= TOL, f"{name} region CI low"
+        assert abs(hi - row["ci_high"]) <= TOL, f"{name} region CI high"
+
+    assert seen == set(reg.index), (
+        f"README negative-control table is missing regions: {set(reg.index) - seen}"
+    )
 
 
 def test_readme_estimator_table_matches_estimates(results_present):

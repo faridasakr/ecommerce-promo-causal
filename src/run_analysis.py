@@ -107,6 +107,31 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
         ci = (f" [{row['ci_low']:.2f}, {row['ci_high']:.2f}]"
               if "ci_low" in row and np.isfinite(row["ci_low"]) else "")
         print(f"  {row['segment']:<12} n={row['n']:>6,}  ATE=${row['ate']:.2f}{ci}")
+    print("  (prior spend is a PRESPECIFIED effect modifier — recovering it")
+    print("   tests the pipeline; it is not an organic discovery)")
+
+    # ------------------------------------------- 4b. negative control: region
+    # Region is drawn independently in the DGP: it enters neither the treatment
+    # model nor the outcome model, so there is no effect modification to find.
+    # Running the identical segment analysis on it asks whether the pipeline
+    # MANUFACTURES segment differences. A spread here comparable to the spend
+    # terciles would mean the spend result cannot be trusted either.
+    print("\n[4b/7] Negative control — same analysis by region")
+    region_labels = sorted(df["region"].unique())
+    region_idx = {r: k for k, r in enumerate(region_labels)}
+    region_seg = df["region"].map(region_idx).to_numpy()
+    hte_region = diagnostics.heterogeneous_effects(
+        X, t, y, region_seg, region_labels, seed=seed, n_boot=segment_boot(n_boot)
+    )
+    hte_region.to_csv(RESULTS / "heterogeneity_region.csv", index=False)
+    for _, row in hte_region.iterrows():
+        ci = (f" [{row['ci_low']:.2f}, {row['ci_high']:.2f}]"
+              if "ci_low" in row and np.isfinite(row["ci_low"]) else "")
+        print(f"  {row['segment']:<12} n={row['n']:>6,}  ATE=${row['ate']:.2f}{ci}")
+    spend_spread = float(hte["ate"].max() - hte["ate"].min())
+    region_spread = float(hte_region["ate"].max() - hte_region["ate"].min())
+    print(f"  spread: ${region_spread:.2f} across regions vs "
+          f"${spend_spread:.2f} across spend terciles")
 
     # --------------------------------------------------------- 5. economics
     print("\n[5/7] Contribution analysis — turning the estimate into a decision")
@@ -278,6 +303,24 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
             "Positivity: every customer had a non-zero probability of both using "
             "and not using the promo (checked via overlap; trimmed where violated).",
             "SUTVA: one customer's promo use does not affect another's revenue.",
+            "The treatment is promo UPTAKE, not promo OFFER, so this estimates "
+            "the effect among customers who would take the offer -- not the "
+            "intention-to-treat effect of offering it, which is the actual "
+            "policy question and is generally smaller.",
+        ],
+        "limitations": [
+            "Bootstrap intervals quantify sampling variability only, not model "
+            "misspecification.",
+            "The unmeasured-confounding check is a simulation stress test, not "
+            "a formal bound such as a Rosenbaum bound or E-value.",
+            "Margin and shipping cost are illustrative placeholders, not "
+            "finance-sourced figures; break-even columns show how far they can "
+            "move before the recommendation flips.",
+            "Static contribution analysis: acquisition, retention and long-run "
+            "LTV effects are not modelled and would need a longitudinal design.",
+            "The estimand is the effect of promo uptake, not of being offered "
+            "the promo; identifying the offer effect would need randomised "
+            "encouragement or an instrument for uptake.",
         ],
         "estimand_note": (
             "Propensity score matching targets the ATT -- the effect among "
@@ -301,6 +344,21 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
             },
         },
         "heterogeneity": hte.replace({np.nan: None}).to_dict(orient="records"),
+        "heterogeneity_note": (
+            "Prior spend is a PRESPECIFIED effect modifier: the data-generating "
+            "process plants stronger effects for lower-spend customers, so "
+            "recovering that pattern validates the pipeline rather than "
+            "discovering something about customers."
+        ),
+        "negative_control_region": hte_region.replace({np.nan: None}).to_dict(
+            orient="records"
+        ),
+        "negative_control_note": (
+            "Region is a negative control: it enters neither the treatment nor "
+            "the outcome model, so no effect modification exists to find. The "
+            "identical segment analysis is run on it to check the pipeline does "
+            "not manufacture segment differences."
+        ),
         "economics": econ.replace({np.nan: None}).to_dict(orient="records"),
         "recommendation": rec,
         "stress_test": stress.to_dict(orient="records"),

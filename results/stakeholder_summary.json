@@ -15,7 +15,15 @@
   "identifying_assumptions": [
     "Conditional exchangeability (no unmeasured confounding) given the observed covariates.",
     "Positivity: every customer had a non-zero probability of both using and not using the promo (checked via overlap; trimmed where violated).",
-    "SUTVA: one customer's promo use does not affect another's revenue."
+    "SUTVA: one customer's promo use does not affect another's revenue.",
+    "The treatment is promo UPTAKE, not promo OFFER, so this estimates the effect among customers who would take the offer -- not the intention-to-treat effect of offering it, which is the actual policy question and is generally smaller."
+  ],
+  "limitations": [
+    "Bootstrap intervals quantify sampling variability only, not model misspecification.",
+    "The unmeasured-confounding check is a simulation stress test, not a formal bound such as a Rosenbaum bound or E-value.",
+    "Margin and shipping cost are illustrative placeholders, not finance-sourced figures; break-even columns show how far they can move before the recommendation flips.",
+    "Static contribution analysis: acquisition, retention and long-run LTV effects are not modelled and would need a longitudinal design.",
+    "The estimand is the effect of promo uptake, not of being offered the promo; identifying the offer effect would need randomised encouragement or an instrument for uptake."
   ],
   "estimand_note": "Propensity score matching targets the ATT -- the effect among customers who actually used the promo. Every other estimator targets the ATE, the effect if the promo were extended to everyone. Trimming and matching also change which customers an estimate refers to, which is recorded per estimator in target_population. These are different questions and their answers should not be compared as if they were the same number.",
   "propensity_models": {
@@ -61,6 +69,42 @@
       "ci_high": 5.396068876001231
     }
   ],
+  "heterogeneity_note": "Prior spend is a PRESPECIFIED effect modifier: the data-generating process plants stronger effects for lower-spend customers, so recovering that pattern validates the pipeline rather than discovering something about customers.",
+  "negative_control_region": [
+    {
+      "segment": "midwest",
+      "n": 12119,
+      "treated_share": 0.3714002805512006,
+      "ate": 6.3143559919928425,
+      "ci_low": 5.389869319816064,
+      "ci_high": 7.513841419928281
+    },
+    {
+      "segment": "northeast",
+      "n": 10925,
+      "treated_share": 0.3783066361556064,
+      "ate": 5.541950567230104,
+      "ci_low": 4.3238496920498894,
+      "ci_high": 6.994924706306073
+    },
+    {
+      "segment": "south",
+      "n": 15497,
+      "treated_share": 0.37736336065044845,
+      "ate": 6.960680496596597,
+      "ci_low": 6.0047649502150415,
+      "ci_high": 8.122945546196561
+    },
+    {
+      "segment": "west",
+      "n": 11459,
+      "treated_share": 0.3655641853564883,
+      "ate": 6.921518796244332,
+      "ci_low": 5.858443611985515,
+      "ci_high": 8.207171354038078
+    }
+  ],
+  "negative_control_note": "Region is a negative control: it enters neither the treatment nor the outcome model, so no effect modification exists to find. The identical segment analysis is run on it to check the pipeline does not manufacture segment differences.",
   "economics": [
     {
       "segment": "low spend",

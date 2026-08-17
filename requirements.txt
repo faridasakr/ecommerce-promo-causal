@@ -4,3 +4,4 @@ scikit-learn>=1.4
 streamlit>=1.30
 pytest>=7.4
 anthropic>=0.40
+pydantic>=2.0

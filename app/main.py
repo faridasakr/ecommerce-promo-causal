@@ -193,16 +193,32 @@ with tab3:
 with tab4:
     st.subheader("Stakeholder assistant")
     st.caption(
-        "The model sees only the computed summary — never the raw data. It is "
-        "instructed to refuse questions the study cannot answer."
+        "The model sees only the computed summary — never the raw data, and "
+        "never the planted ground truth. It must fill a schema whose fields are "
+        "checked against the analysis before any prose is shown."
     )
     q = st.text_input("Question", "Should we run this promotion again?")
     if st.button("Ask"):
         from explain import ask
 
         out = ask(q, summary=summary)
-        st.write(out["answer"])
-        if out["warnings"]:
-            st.warning("Guardrail flags:\n\n" + "\n\n".join(f"- {w}" for w in out["warnings"]))
+
+        # Prose is rendered only if every structured field matched. A failed
+        # response is reported as a failure rather than shown with a caveat.
+        if not out["rendered"]:
+            st.error(
+                "**Response withheld.** Structured validation failed, so the "
+                "prose was never rendered:\n\n"
+                + "\n\n".join(f"- {e}" for e in out["errors"])
+            )
         else:
-            st.caption("✓ No causal overclaims detected.")
+            st.write(out["answer"])
+            if out["warnings"]:
+                st.warning(
+                    "Guardrail flags:\n\n"
+                    + "\n\n".join(f"- {w}" for w in out["warnings"])
+                )
+            else:
+                st.caption("✓ Schema fields matched the analysis; no overclaims detected.")
+            with st.expander("Structured fields the model had to fill"):
+                st.json(out["structured"])

@@ -19,19 +19,32 @@ exist -- the assistant would be leaning on knowledge the analysis could never
 have. Keeping the answer key out is what makes its output an honest rehearsal
 of the real-data case.
 
-Three guardrails on top:
-  1. A system prompt that forbids causal claims not present in the summary, and
-     requires the model to refuse questions the analysis cannot answer.
-  2. `validate_response` -- flags causal verbs applied to variables we never
-     estimated an effect for.
-  3. `validate_numeric_fidelity` -- flags dollar figures that do not appear in
-     the summary, catching silent rounding and invented numbers.
+Three layers of defence, in the order they run:
 
-None of these is a safety guarantee. (2) is regex-based and cannot parse
-negation, hedging, or paraphrase; it catches the common failure, not every
-failure. The structured-output upgrade described in the README's future work --
-having the model emit a Pydantic schema whose `causal_claims` list is validated
-field-by-field before the prose is rendered -- is the principled version.
+  1. SYSTEM PROMPT -- forbids causal claims not present in the summary, requires
+     refusal of questions the analysis cannot answer, and forbids upgrading an
+     "economically uncertain" segment into a recommendation to target.
+
+  2. SCHEMA VALIDATION -- the model must fill `StakeholderAnswer`, and every
+     structured field is compared against the summary BEFORE any prose is
+     shown. Numbers must match to the cent; the three segment lists must equal
+     the pipeline's verdict groups exactly; assumptions and limitations must be
+     selected from the summary rather than invented. If any field fails, the
+     prose is never rendered -- `ask()` returns rendered=False with field-level
+     errors.
+
+  3. REGEX BACKSTOP -- `validate_response` and `validate_numeric_fidelity` then
+     run over the free-text `answer` field, catching overclaims that live in
+     prose and so cannot be schema-checked.
+
+Layer 2 exists because layer 3 is not a design. Regexes inspect prose after the
+fact and catch only what a pattern anticipates; they cannot parse negation or
+hedging, and a fluent wrong answer passes. Moving the load-bearing claims into
+structured fields makes them checkable rather than merely inspectable. Layer 3
+is kept because prose can still overclaim in ways no schema constrains.
+
+None of this is a safety guarantee. It narrows the failure surface; it does not
+close it.
 """
 
 from __future__ import annotations
@@ -40,6 +53,8 @@ import json
 import os
 import re
 from pathlib import Path
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -207,6 +222,87 @@ def check_answer(text: str, summary: dict) -> list[str]:
     return validate_response(text) + validate_numeric_fidelity(text, summary)
 
 
+# ---------------------------------------------------------------------------
+# Layer 2: structured output.
+#
+# The regex validators are a backstop, not a design. They inspect prose after
+# the fact and can only catch what a pattern anticipates -- they cannot parse
+# negation or hedging, and a fluent wrong answer slips through. Making the
+# model fill a schema moves the load-bearing claims out of prose entirely, so
+# they can be compared field-by-field against the summary before any text is
+# shown. Prose is rendered only if every structured field matches.
+# ---------------------------------------------------------------------------
+class StakeholderAnswer(BaseModel):
+    """The shape the model must produce. Every field is checkable."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    answer: str = Field(min_length=1, description="Prose for the stakeholder.")
+    headline_estimate: float
+    ci: list[float] = Field(min_length=2, max_length=2)
+    segments_to_target: list[str]
+    segments_to_withhold: list[str]
+    segments_uncertain: list[str]
+    assumptions: list[str] = Field(min_length=1)
+    limitations: list[str] = Field(min_length=1)
+
+
+def validate_structured(payload: dict, summary: dict) -> tuple[StakeholderAnswer | None, list[str]]:
+    """Parse and check a structured response against the summary.
+
+    Returns (parsed, errors). `parsed` is None when the payload does not even
+    fit the schema. Errors are field-level and specific, because "the model was
+    wrong" is not actionable but "segments_to_target claimed high spend" is.
+    """
+    try:
+        parsed = StakeholderAnswer.model_validate(payload)
+    except ValidationError as e:
+        return None, [f"Schema violation: {err['loc']}: {err['msg']}" for err in e.errors()]
+
+    errors: list[str] = []
+    rec = summary.get("recommendation", {})
+
+    # Numbers must match to the cent -- see validate_numeric_fidelity on why
+    # this compares floats rather than formatted strings.
+    if abs(parsed.headline_estimate - summary["headline_estimate"]) >= 0.005:
+        errors.append(
+            f"headline_estimate {parsed.headline_estimate} does not match the "
+            f"analysis value {summary['headline_estimate']}"
+        )
+    for i, (got, want) in enumerate(zip(parsed.ci, summary["headline_ci"])):
+        if abs(got - want) >= 0.005:
+            errors.append(f"ci[{i}] {got} does not match the analysis value {want}")
+
+    # Targeting claims must be exactly the pipeline's verdict groups. This is
+    # the field that matters most: it is the instruction a stakeholder acts on,
+    # and a model that upgrades an uncertain segment produces a confident,
+    # fluent, wrong recommendation that no regex would catch.
+    for field, key in (
+        ("segments_to_target", "segments_evidence_supports_targeting"),
+        ("segments_to_withhold", "segments_evidence_says_destroy_contribution"),
+        ("segments_uncertain", "segments_economically_uncertain"),
+    ):
+        got = sorted(getattr(parsed, field))
+        want = sorted(rec.get(key, []))
+        if got != want:
+            errors.append(f"{field} is {got}, but the analysis says {want}")
+
+    # Assumptions and limitations must be selected from the summary, not
+    # invented or paraphrased into something weaker.
+    for field, allowed in (
+        ("assumptions", summary.get("identifying_assumptions", [])),
+        ("limitations", summary.get("limitations", [])),
+    ):
+        for item in getattr(parsed, field):
+            if item not in allowed:
+                errors.append(
+                    f"{field} contains an entry not present in the analysis "
+                    f"summary: {item!r}"
+                )
+
+    return parsed, errors
+
+
 def build_prompt(question: str, summary: dict) -> list[dict]:
     return [
         {
@@ -219,34 +315,90 @@ def build_prompt(question: str, summary: dict) -> list[dict]:
     ]
 
 
+def render(payload: dict, summary: dict) -> dict:
+    """Validate a structured payload, then render prose only if it holds up.
+
+    The order is the point. Schema validation runs BEFORE any text reaches a
+    reader, so a response whose structured claims disagree with the analysis is
+    never rendered at all -- it is reported as a failure. The regex validators
+    then run as a second pass over the free-text field, catching overclaims
+    that live in prose and therefore cannot be schema-checked.
+    """
+    parsed, errors = validate_structured(payload, summary)
+    if errors:
+        return {
+            "answer": None,
+            "structured": parsed.model_dump() if parsed else None,
+            "errors": errors,
+            "warnings": [],
+            "rendered": False,
+        }
+
+    # Layer 3: the free-text field still gets the regex backstop.
+    warnings = check_answer(parsed.answer, summary)
+    return {
+        "answer": parsed.answer,
+        "structured": parsed.model_dump(),
+        "errors": [],
+        "warnings": warnings,
+        "rendered": True,
+    }
+
+
 def ask(question: str, summary: dict | None = None, model: str = "claude-sonnet-4-5") -> dict:
-    """Answer a stakeholder question. Returns {'answer', 'warnings'}.
+    """Answer a stakeholder question.
+
+    Returns {'answer', 'structured', 'errors', 'warnings', 'rendered', 'mode'}.
+    `answer` is None when structured validation failed -- callers must check
+    `rendered` rather than assuming prose is present.
 
     Requires ANTHROPIC_API_KEY. Falls back to a template response so the
-    pipeline is testable without network access.
+    pipeline is testable without network access; the offline path goes through
+    the identical validation, so the guardrails are exercised in CI.
     """
     summary = summary or load_summary()
 
     if not os.environ.get("ANTHROPIC_API_KEY"):
-        answer = _offline_fallback(question, summary)
-        return {"answer": answer, "warnings": check_answer(answer, summary), "mode": "offline"}
+        out = render(_offline_payload(question, summary), summary)
+        out["mode"] = "offline"
+        return out
 
     from anthropic import Anthropic
 
     client = Anthropic()
     resp = client.messages.create(
         model=model,
-        max_tokens=900,
+        max_tokens=1200,
         system=SYSTEM_PROMPT,
         messages=build_prompt(question, summary),
+        tools=[{
+            "name": "stakeholder_answer",
+            "description": "Return the answer as structured fields.",
+            "input_schema": StakeholderAnswer.model_json_schema(),
+        }],
+        tool_choice={"type": "tool", "name": "stakeholder_answer"},
     )
-    answer = resp.content[0].text
-    return {"answer": answer, "warnings": check_answer(answer, summary), "mode": "api"}
+    blocks = [b for b in resp.content if getattr(b, "type", None) == "tool_use"]
+    if not blocks:
+        return {
+            "answer": None, "structured": None,
+            "errors": ["Model did not return the structured payload."],
+            "warnings": [], "rendered": False, "mode": "api",
+        }
+    out = render(blocks[0].input, summary)
+    out["mode"] = "api"
+    return out
 
 
-def _offline_fallback(question: str, s: dict) -> str:
+def _offline_payload(question: str, s: dict) -> dict:
+    """Template answer in the same structured shape the model must return.
+
+    Built from the summary rather than hard-coded, so the offline path
+    exercises the real validation instead of trivially satisfying it.
+    """
     lo, hi = s["headline_ci"]
-    return (
+    rec = s.get("recommendation", {})
+    prose = (
         f"The estimated causal effect of the free-shipping promotion is "
         f"${s['headline_estimate']:.2f} of incremental revenue per customer "
         f"(95% CI ${lo:.2f}-${hi:.2f}), using {s['headline_method']}.\n\n"
@@ -259,6 +411,16 @@ def _offline_fallback(question: str, s: dict) -> str:
         f"attributes we adjusted for capture the reasons people chose to use the "
         f"promo. [offline mode: set ANTHROPIC_API_KEY for a full response]"
     )
+    return {
+        "answer": prose,
+        "headline_estimate": s["headline_estimate"],
+        "ci": list(s["headline_ci"]),
+        "segments_to_target": rec.get("segments_evidence_supports_targeting", []),
+        "segments_to_withhold": rec.get("segments_evidence_says_destroy_contribution", []),
+        "segments_uncertain": rec.get("segments_economically_uncertain", []),
+        "assumptions": list(s.get("identifying_assumptions", [])),
+        "limitations": list(s.get("limitations", [])),
+    }
 
 
 if __name__ == "__main__":
@@ -267,7 +429,14 @@ if __name__ == "__main__":
     q = " ".join(sys.argv[1:]) or "Did the free shipping promotion actually work?"
     out = ask(q)
     print(f"Q: {q}\n")
+    if not out["rendered"]:
+        print("REFUSED — structured validation failed before rendering:")
+        for e in out["errors"]:
+            print(f"  - {e}")
+        sys.exit(1)
     print(out["answer"])
+    for w in out["warnings"]:
+        print(f"\n[guardrail] {w}")
     if out["warnings"]:
         print("\n--- GUARDRAIL WARNINGS ---")
         for w in out["warnings"]:

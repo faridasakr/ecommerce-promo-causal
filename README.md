@@ -56,6 +56,29 @@ Standard deviation of the net contribution across bootstrap replicates, from `re
 
 Note the direction is not something to reason out in advance. Adding a second source of uncertainty *sounds* like it should widen the interval, and for a sum it would. For a difference with positively correlated terms it narrows. That is why the resampling has to be joint rather than assembled from parts — the covariance is doing real work and only a single resampling of the whole chain captures it.
 
+## Segment effects, and a negative control
+
+**The spend result is a pipeline test, not a discovery.** The data-generating process plants effect modification in prior spend on purpose: the promo is written to help low-spend customers more. Recovering that pattern shows the segment machinery works — it is not a finding about customers, and presenting it as one would be circular. On real data the same analysis would be genuinely exploratory and would need pre-registration or a holdout to carry weight.
+
+So the honest question is not "did we find heterogeneity?" but "does this pipeline find heterogeneity that isn't there?" **Region answers that.** It is drawn independently in the DGP, entering neither the treatment model nor the outcome model, so there is no effect modification to find. The identical segment analysis runs on it as a negative control:
+
+| Segment | Prespecified modifier — ATE | 95% CI |
+|---|---:|---:|
+| Low spend | $7.98 | [7.12, 8.62] |
+| Mid spend | $7.12 | [6.54, 7.86] |
+| High spend | $4.01 | [2.93, 5.40] |
+
+| Region | Negative control — ATE | 95% CI |
+|---|---:|---:|
+| midwest | $6.31 | [5.39, 7.51] |
+| northeast | $5.54 | [4.32, 6.99] |
+| south | $6.96 | [6.00, 8.12] |
+| west | $6.92 | [5.86, 8.21] |
+
+**Read the intervals, not the spread.** The region point estimates fan out by $1.42 — from $5.54 to $6.96 — even though the DGP plants nothing there. That is estimation noise, and it is exactly why a spread comparison is the wrong test: a naive reading of those four numbers would invent a story about regional demand. What settles it is that **every pair of region intervals overlaps**, so no region is distinguishable from any other. Across spend terciles, low and high do not overlap at all ([7.12, 8.62] against [2.93, 5.40]).
+
+So the pipeline separates segments when effect modification is planted and declines to when it is not. Had the regions separated too, the spend result would have been an artefact of the method rather than a property of the data, and the targeting recommendation built on it would have been worthless. Both tables regenerate every run, and a test asserts the overlap pattern in both directions, so this is a standing check rather than a one-off reassurance.
+
 ## The estimate behind it
 
 | Estimator | Target estimand | Target population | Estimate | 95% CI | True value | Error |
@@ -146,7 +169,7 @@ data/raw/customers.csv
    results/summary.json
         │
         ▼
-    explain.py ──► LLM stakeholder layer (3 guardrails)
+    explain.py ──► LLM stakeholder layer (3 layers: prompt, schema, regex)
 ```
 
 **Two propensity models, diagnosed separately.** IPW and PSM use a logistic model; AIPW uses cross-fitted gradient boosting. They are reported side by side in `results/propensity.json` so a clean balance table from one model cannot vouch for an estimate produced by the other. Balance is computed on the *trimmed* population, using the same weights the estimator applies — reporting balance on the full sample while estimating on a trimmed one describes two different populations.
@@ -210,7 +233,8 @@ Explanation-layer failure
 ├── silent numeric drift ($6.42 → $6.40)    caught by validate_numeric_fidelity()
 │   └── first implementation compared formatted strings, so "6.4" matched both;
 │       fixed by comparing floats to the cent
-└── regex validators cannot parse negation or hedging — known limitation
+└── regex validators cannot parse negation or hedging — now a backstop behind
+    schema validation, not the primary defence
 ```
 
 ## Unmeasured-confounding stress test
@@ -229,9 +253,11 @@ Explanation-layer failure
 - Synthetic data. The confounding structure is one I planted; real self-selection may be non-linear in ways these covariates cannot capture.
 - Bootstrap CIs understate total uncertainty (see the lesson above).
 - 2-fold cross-fitting is the minimum; 5-fold would be lower-variance at higher cost.
-- Guardrail validators are regex/tolerance based and will miss creatively-phrased overclaims. The principled version is structured output — have the model emit a Pydantic schema whose `causal_claims` list is validated field-by-field before the prose renders.
+- The regex backstop still cannot parse negation or hedging. It now sits behind schema validation rather than carrying the load, but prose claims outside the structured fields remain only inspectable, not checkable.
 - Contribution analysis is static: no acquisition, retention, or LTV effects, which would need a longitudinal design.
 - No temporal component — difference-in-differences on pre/post data would identify the effect under weaker assumptions.
+
+**What this estimates, and what it doesn't.** The treatment is promo *uptake*, so the estimand is the effect of using free shipping among customers who could use it. The policy question — should we offer free shipping, and to whom — is an intention-to-treat question about being *offered* the promo, which is not the same quantity. With one-sided non-compliance the uptake effect generally exceeds the offer effect. Identifying the offer effect would need randomised encouragement or an instrument for uptake; neither exists in this observational design. Read the targeting recommendation as 'among customers who would take the offer'.
 
 ## Setup
 
