@@ -1,0 +1,164 @@
+{
+  "question": "Did the 4-week free-shipping promotion cause incremental revenue, or would those customers have purchased anyway?",
+  "n_customers": 50000,
+  "treated_share": 0.37342,
+  "naive_estimate": 23.033,
+  "headline_estimate": 6.415,
+  "headline_ci": [
+    5.981,
+    7.164
+  ],
+  "headline_method": "Cross-fitted AIPW (doubly robust)",
+  "headline_estimand": "ATE",
+  "selection_bias_dollars": 16.618000000000002,
+  "overstatement_factor": 3.59,
+  "identifying_assumptions": [
+    "Conditional exchangeability (no unmeasured confounding) given the observed covariates.",
+    "Positivity: every customer had a non-zero probability of both using and not using the promo (checked via overlap; trimmed where violated).",
+    "SUTVA: one customer's promo use does not affect another's revenue."
+  ],
+  "estimand_note": "Propensity score matching targets the ATT and is scored against the true ATT; all other estimators target the ATE.",
+  "propensity_models": {
+    "logistic": {
+      "used_by": [
+        "IPW (stabilised)",
+        "Propensity score matching"
+      ],
+      "worst_abs_smd_after_weighting": 0.006687606159507692,
+      "pct_trimmed": 0.242
+    },
+    "crossfit_gbm": {
+      "used_by": [
+        "AIPW (cross-fitted, doubly robust)"
+      ],
+      "worst_abs_smd_after_weighting": 0.04155282820090076,
+      "pct_trimmed": 0.055999999999999994
+    }
+  },
+  "heterogeneity": [
+    {
+      "segment": "low spend",
+      "n": 16662,
+      "treated_share": 0.24096747089184972,
+      "ate": 7.9804335666972985,
+      "ci_low": 7.137551981765785,
+      "ci_high": 8.337334598103883
+    },
+    {
+      "segment": "mid spend",
+      "n": 16670,
+      "treated_share": 0.367006598680264,
+      "ate": 7.1238781026418,
+      "ci_low": 6.514677254331175,
+      "ci_high": 7.835511320862428
+    },
+    {
+      "segment": "high spend",
+      "n": 16668,
+      "treated_share": 0.5122390208783297,
+      "ate": 4.012418252069893,
+      "ci_low": 2.7278713095822757,
+      "ci_high": 5.3300663362673175
+    }
+  ],
+  "economics": [
+    {
+      "segment": "low spend",
+      "incremental_revenue": 7.98,
+      "gross_profit": 3.59,
+      "shipping_subsidy": -2.62,
+      "net_contribution": 0.98,
+      "profitable": true,
+      "breakeven_shipping_cost": 8.92,
+      "breakeven_gross_margin": 0.328,
+      "treated_purchase_rate": 0.402,
+      "net_contribution_low": 0.6,
+      "net_contribution_high": 1.14,
+      "sign_is_certain": true
+    },
+    {
+      "segment": "mid spend",
+      "incremental_revenue": 7.12,
+      "gross_profit": 3.21,
+      "shipping_subsidy": -3.25,
+      "net_contribution": -0.04,
+      "profitable": false,
+      "breakeven_shipping_cost": 6.41,
+      "breakeven_gross_margin": 0.456,
+      "treated_purchase_rate": 0.5,
+      "net_contribution_low": -0.32,
+      "net_contribution_high": 0.28,
+      "sign_is_certain": false
+    },
+    {
+      "segment": "high spend",
+      "incremental_revenue": 4.01,
+      "gross_profit": 1.81,
+      "shipping_subsidy": -4.11,
+      "net_contribution": -2.31,
+      "profitable": false,
+      "breakeven_shipping_cost": 2.85,
+      "breakeven_gross_margin": 1.025,
+      "treated_purchase_rate": 0.633,
+      "net_contribution_low": -2.89,
+      "net_contribution_high": -1.72,
+      "sign_is_certain": true
+    }
+  ],
+  "recommendation": {
+    "decision": "Target the promotion at: low spend.",
+    "profitable_segments": [
+      "low spend"
+    ],
+    "unprofitable_segments": [
+      "mid spend",
+      "high spend"
+    ],
+    "net_contribution_blanket_offer": -0.46,
+    "net_contribution_targeted_offer": 0.98,
+    "segments_where_sign_is_uncertain": [
+      "mid spend"
+    ],
+    "assumptions": {
+      "gross_margin": 0.45,
+      "shipping_cost_per_order": 6.5,
+      "source": "Illustrative. Replace with finance's actual blended margin and carrier rate before acting on this analysis."
+    },
+    "caveats": [
+      "Contribution figures inherit the causal estimate's assumptions (conditional exchangeability, positivity, SUTVA).",
+      "Margin and shipping cost are illustrative placeholders, not finance-sourced figures.",
+      "Break-even columns show how far the assumptions can move before the recommendation flips.",
+      "This is a static contribution analysis: it ignores promo-driven acquisition, retention, and any long-run LTV effects, all of which would require a longitudinal design to estimate."
+    ]
+  },
+  "stress_test": [
+    {
+      "gamma": 0.0,
+      "ate_under_confounding": 6.415009701367754
+    },
+    {
+      "gamma": 0.1,
+      "ate_under_confounding": 6.1034607201279965
+    },
+    {
+      "gamma": 0.2,
+      "ate_under_confounding": 6.5316967955044785
+    },
+    {
+      "gamma": 0.3,
+      "ate_under_confounding": 7.918709538403653
+    },
+    {
+      "gamma": 0.4,
+      "ate_under_confounding": 9.791041287778553
+    },
+    {
+      "gamma": 0.5,
+      "ate_under_confounding": 11.632428888867734
+    }
+  ],
+  "stress_test_caveat": "Simulation-based stress test, not a Rosenbaum bound or E-value. gamma is not calibrated to a real-world confounding strength.",
+  "true_ate_revealed": 5.86743499737903,
+  "true_att_revealed": 5.978596579904368,
+  "ci_coverage_note": "Bootstrap CIs capture sampling variability only, not model misspecification. Some intervals exclude the true value despite small point-estimate error."
+}

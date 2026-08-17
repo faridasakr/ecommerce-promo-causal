@@ -1,0 +1,39 @@
+{
+  "logistic": {
+    "used_by": [
+      "IPW (stabilised)",
+      "Propensity score matching"
+    ],
+    "overlap": {
+      "ps_treated_min": 0.015854773732827118,
+      "ps_treated_max": 0.9904214588633469,
+      "ps_control_min": 0.005263718708336921,
+      "ps_control_max": 0.9720598418663794,
+      "n_trimmed": 121,
+      "pct_trimmed": 0.242,
+      "max_ipw_weight_untrimmed": 63.072486359708314,
+      "max_ipw_weight_trimmed": 46.73691844534012,
+      "has_nan": false,
+      "has_extreme": false
+    },
+    "worst_abs_smd_after_weighting": 0.006687606159507692
+  },
+  "crossfit_gbm": {
+    "used_by": [
+      "AIPW (cross-fitted, doubly robust)"
+    ],
+    "overlap": {
+      "ps_treated_min": 0.02106269784350019,
+      "ps_treated_max": 0.9836017917056059,
+      "ps_control_min": 0.008578139859174959,
+      "ps_control_max": 0.9594956864169554,
+      "n_trimmed": 28,
+      "pct_trimmed": 0.055999999999999994,
+      "max_ipw_weight_untrimmed": 47.477298845104656,
+      "max_ipw_weight_trimmed": 47.477298845104656,
+      "has_nan": false,
+      "has_extreme": false
+    },
+    "worst_abs_smd_after_weighting": 0.04155282820090076
+  }
+}
