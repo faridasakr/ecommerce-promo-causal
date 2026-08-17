@@ -216,6 +216,65 @@ def test_economics_flags_loss_making_segments():
     assert not econ.loc[econ.segment == "high spend", "profitable"].item()
 
 
+def test_subsidy_uses_causal_incidence_not_observed_rate():
+    """The subsidy multiplier must be P(purchase | do(T=1)), not the raw rate.
+
+    The observed purchase rate among treated customers is confounded -- treated
+    customers self-selected, and the traits driving uptake also drive
+    purchasing. Using it would reintroduce, on the cost side, exactly the
+    selection bias the revenue side is corrected for. This test pins the
+    arithmetic to the causal rate by making the two differ sharply.
+    """
+    hte = pd.DataFrame({"segment": ["low spend"], "ate": [8.0],
+                        "ci_low": [7.2], "ci_high": [8.2]})
+    causal = {"low spend": 0.30}
+    observed = {"low spend": 0.60}  # confounded, deliberately far from causal
+
+    econ = economics.segment_economics(
+        hte, causal, economics.CostAssumptions(), observed_rates=observed
+    )
+    row = econ.iloc[0]
+
+    ship = economics.CostAssumptions().shipping_cost_per_order
+    assert row["shipping_subsidy"] == pytest.approx(-ship * 0.30, abs=0.01), (
+        "subsidy must be computed from the causal incidence (0.30), not the "
+        "observed treated rate (0.60)"
+    )
+    assert row["shipping_subsidy"] != pytest.approx(-ship * 0.60, abs=0.01)
+
+    # net = margin * ate - causal subsidy
+    assert row["net_contribution"] == pytest.approx(
+        0.45 * 8.0 - ship * 0.30, abs=0.01
+    )
+
+    # Both rates must be visible so the correction is auditable.
+    assert row["causal_purchase_rate"] == pytest.approx(0.30)
+    assert row["observed_treated_rate"] == pytest.approx(0.60)
+    assert row["rate_confounding_gap"] == pytest.approx(0.30, abs=0.001)
+
+
+def test_causal_incidence_recovers_planted_lift(data):
+    """AIPW on the purchase indicator should recover the planted incidence lift.
+
+    INCIDENCE_LIFT is planted at 5.5pp with heterogeneity by prior spend, so the
+    pooled causal lift should land near it -- and well below the naive
+    treated-vs-control gap, which is inflated by self-selection.
+    """
+    X, t, y, names, truth = data
+    purchased = (y > 0).astype(int)
+
+    p0, p1 = estimators.aipw_arm_means(X, t, purchased, seed=0)
+    causal_lift = p1 - p0
+    naive_lift = purchased[t == 1].mean() - purchased[t == 0].mean()
+
+    assert 0.0 < causal_lift < 0.15, f"implausible causal incidence lift {causal_lift}"
+    assert causal_lift < naive_lift, (
+        "the causal incidence lift must be smaller than the naive gap -- "
+        "self-selection inflates the observed difference"
+    )
+    assert 0.0 < p1 < 1.0 and 0.0 < p0 < 1.0, "probabilities must stay in (0, 1)"
+
+
 def test_economics_reports_breakeven_and_caveats():
     hte = pd.DataFrame({"segment": ["low spend"], "ate": [8.0], "ci_low": [7.2], "ci_high": [8.2]})
     econ = economics.segment_economics(hte, {"low spend": 0.40})
@@ -311,6 +370,7 @@ README = Path(__file__).resolve().parents[1] / "README.md"
 
 TOL = 0.015          # dollar figures: absorbs 2dp rounding, catches real drift
 PCT_TOL = 1.0        # the Error column is displayed as a whole percent
+RATE_TOL = 0.002     # purchase rates are quoted to 3dp; keep this tight
 
 
 def _num(cell: str) -> float:
@@ -368,8 +428,25 @@ def test_readme_decision_table_matches_economics(results_present):
         seg = cells[0].lower()
         if seg not in econ.index:
             continue
-        seen.add(seg)
         row = econ.loc[seg]
+
+        # Two tables key off segment names: the 7-column decision table and the
+        # 4-column observed-vs-causal rate table. Dispatch on shape so adding a
+        # segment-keyed table never silently unpacks into the wrong columns.
+        if len(cells) == 4:
+            obs, causal, gap = (_num(c) for c in cells[1:4])
+            assert abs(obs - row["observed_treated_rate"]) <= RATE_TOL, f"{seg} observed rate"
+            assert abs(causal - row["causal_purchase_rate"]) <= RATE_TOL, f"{seg} causal rate"
+            # README states the gap as causal - observed; the CSV as observed -
+            # causal. Check the README is self-consistent AND matches in size.
+            assert abs(gap - (causal - obs)) <= RATE_TOL, f"{seg} gap sign/self-consistency"
+            assert abs(abs(gap) - abs(row["rate_confounding_gap"])) <= RATE_TOL, f"{seg} gap size"
+            continue
+
+        assert len(cells) == 7, (
+            f"unexpected segment-keyed table row with {len(cells)} cells: {cells}"
+        )
+        seen.add(seg)
         rev, profit, subsidy, net = (_num(c) for c in cells[1:5])
         ci_low, ci_high = _pair(cells[5])
 

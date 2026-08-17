@@ -84,6 +84,8 @@ Balance: worst \|SMD\| 0.660 → 0.007 (logistic), 0.042 (cross-fitted GBM).
 
 Intervals containing their target: 1 of 3 in this realization (naive has no causal target; PSM has no valid bootstrap interval). Report this as a count for this sample, never as a coverage *rate* — a rate is a property of the procedure under repeated sampling and would need a simulation study. "Under-coverage" is the wrong word and must not reappear.
 
-Segment contribution: low +$0.98 [+0.60, +1.14], mid −$0.04 [−0.32, +0.28], high −$2.31 [−2.89, −1.72].
+Segment contribution: low +$1.29 [+0.91, +1.45], mid +$0.25 [−0.02, +0.57], high −$2.09 [−2.67, −1.49].
 
-Low-spend net sits ~6ppm from a rounding boundary (true value $0.9750058); a ±0.01 drift across library versions is expected, not a regression.
+The subsidy multiplier is the CAUSAL incidence P(purchase | do(T=1)) per segment (0.354 / 0.454 / 0.599), not the observed treated rate (0.402 / 0.500 / 0.633). The observed rate is confounded and runs 3-5pp high; using it reintroduces selection bias on the cost side. Both are reported in economics.csv.
+
+Mid-spend's point estimate is positive but its interval still straddles zero (sign_is_certain=False), so it remains unresolvable — the flip from -$0.04 to +$0.25 changed the point estimate, not the verdict.

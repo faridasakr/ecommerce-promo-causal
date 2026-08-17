@@ -47,15 +47,26 @@ def segment_economics(
     hte: pd.DataFrame,
     purchase_rates: dict[str, float],
     assumptions: CostAssumptions | None = None,
+    observed_rates: dict[str, float] | None = None,
 ) -> pd.DataFrame:
     """Per-segment contribution analysis.
 
     Parameters
     ----------
     hte : DataFrame with columns [segment, ate, ci_low, ci_high]
-    purchase_rates : share of TREATED customers in each segment who ordered.
-        The subsidy is paid per order, so this is the right multiplier -- not
-        the segment's share of the population.
+    purchase_rates : CAUSAL purchase incidence under treatment, P(purchase |
+        do(T=1)), per segment. The subsidy is paid per order, so the multiplier
+        must be the rate you would actually face if the segment were treated.
+
+        This must NOT be the observed purchase rate among treated customers.
+        That rate is confounded: treated customers self-selected, and the traits
+        that drove uptake also drive purchasing, so it runs high and inflates
+        the subsidy. Using it would reintroduce exactly the selection bias the
+        rest of the pipeline exists to remove -- on the cost side of a decision
+        the revenue side was carefully de-confounded for.
+    observed_rates : the confounded rate, carried through for comparison only.
+        Reported next to the causal figure so the gap is visible rather than
+        asserted. Never used in the arithmetic.
     """
     a = assumptions or CostAssumptions()
     rows = []
@@ -83,8 +94,20 @@ def segment_economics(
             "profitable": bool(net > 0),
             "breakeven_shipping_cost": round(breakeven_ship, 2),
             "breakeven_gross_margin": round(breakeven_margin, 3),
-            "treated_purchase_rate": round(rate, 3),
+            # The rate actually used in the subsidy above.
+            "causal_purchase_rate": round(rate, 3),
         }
+
+        # Both rates are reported so the correction is auditable: if they are
+        # close that is itself worth showing, and if they diverge the gap is the
+        # finding.
+        if observed_rates is not None and seg in observed_rates:
+            obs = observed_rates[seg]
+            row["observed_treated_rate"] = round(obs, 3)
+            row["rate_confounding_gap"] = round(obs - rate, 3)
+            row["subsidy_if_observed_rate"] = round(
+                -a.shipping_cost_per_order * obs, 2
+            )
 
         # Propagate the causal CI through to contribution, so the decision
         # carries the estimate's uncertainty rather than laundering it away.

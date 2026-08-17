@@ -10,15 +10,25 @@
 
 | Segment | Incremental revenue | Gross profit @45% | Shipping subsidy | **Net contribution** | 95% CI | Verdict |
 |---|---:|---:|---:|---:|---:|---|
-| Low spend | $7.98 | $3.59 | −$2.62 | **+$0.98** | [+0.60, +1.14] | Profitable ✅ |
-| Mid spend | $7.12 | $3.21 | −$3.25 | **−$0.04** | [−0.32, +0.28] | **Too close to call** ⚠️ |
-| High spend | $4.01 | $1.81 | −$4.11 | **−$2.31** | [−2.89, −1.72] | Loss-making ❌ |
+| Low spend | $7.98 | $3.59 | −$2.30 | **+$1.29** | [+0.91, +1.45] | Profitable ✅ |
+| Mid spend | $7.12 | $3.21 | −$2.95 | **+$0.25** | [−0.02, +0.57] | **Too close to call** ⚠️ |
+| High spend | $4.01 | $1.81 | −$3.89 | **−$2.09** | [−2.67, −1.49] | Loss-making ❌ |
 
-**Recommendation: target the promotion at low-spend customers only. Hold mid-spend pending a larger sample — its contribution interval straddles zero, so the current data cannot tell you which side of break-even it falls on.**
+**Recommendation: target the promotion at low-spend customers. Mid-spend still cannot be called — its point estimate is now positive, but the interval straddles zero, so the data does not establish which side of break-even it falls on. High-spend remains clearly loss-making.**
 
 The subsidy scales with how many people *order*, not how much they spend. High-spend customers order more often, so you pay shipping on many purchases that would have happened anyway — which is how a segment can generate real incremental revenue and still lose money.
 
-Two things a revenue-only analysis would have gotten wrong: it ranks mid-spend ($7.12) as nearly as good as low-spend ($7.98), when in contribution terms one is profitable and the other is indistinguishable from zero; and it makes high-spend look worth subsidising when it destroys $2.31 per customer.
+Two things a revenue-only analysis would have gotten wrong: it ranks mid-spend ($7.12) as nearly as good as low-spend ($7.98), when in contribution terms one is clearly profitable and the other is indistinguishable from zero; and it makes high-spend look worth subsidising when it destroys $2.09 per customer.
+
+**The subsidy multiplier has to be causal too.** How many orders you subsidise is the purchase rate you would face *if the segment were treated* — P(purchase | do(T=1)) — not the purchase rate observed among customers who chose the promo. Those customers self-selected, and the traits that drove uptake also drive purchasing, so the observed rate runs high:
+
+| Segment | Observed rate (treated) | Causal rate, do(T=1) | Gap |
+|---|---:|---:|---:|
+| Low spend | 0.402 | 0.354 | −0.048 |
+| Mid spend | 0.500 | 0.454 | −0.046 |
+| High spend | 0.633 | 0.599 | −0.034 |
+
+Using the observed rate would have quietly put the selection bias back into the decision — on the *cost* side, after removing it from the revenue side. It inflates the subsidy by 3–5pp of orders, which is $0.22–$0.32 per customer: enough to push mid-spend from marginally positive to marginally negative. The causal rate is estimated by running the same cross-fitted AIPW on a binary purchase indicator, so the cost side gets the same treatment as the revenue side. Both rates are reported in `results/economics.csv` so the correction is auditable rather than asserted.
 
 The causal CIs are propagated through the margin arithmetic rather than discarded at the handoff — which is what surfaces the mid-spend ambiguity instead of hiding it behind a tidy point estimate.
 
@@ -165,7 +175,7 @@ Estimation error
 
 Decision-layer error
 ├── revenue-optimal ≠ profit-optimal        mid-spend flips from #2 to unresolvable
-├── contribution CI straddles zero          mid-spend: [-0.32, +0.28], no decision possible
+├── contribution CI straddles zero          mid-spend: [-0.02, +0.57], no decision possible
 ├── margin/shipping assumptions unverified  break-even columns bound the risk
 └── static analysis ignores LTV             acquisition/retention effects unmodelled
 

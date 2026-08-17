@@ -90,10 +90,30 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
     # --------------------------------------------------------- 5. economics
     print("\n[5/7] Contribution analysis — turning the estimate into a decision")
     assumptions = economics.CostAssumptions()
-    rates = economics.purchase_rates_by_segment(
+
+    # The subsidy multiplier must be causal. The observed purchase rate among
+    # treated customers is confounded by the same self-selection the revenue
+    # estimate corrects for, so using it would put the bias back on the cost
+    # side of the decision.
+    purchased = (y > 0).astype(int)
+    incidence = diagnostics.causal_incidence_by_segment(
+        X, t, purchased, segment, SEGMENTS, seed=seed
+    )
+    incidence.to_csv(RESULTS / "incidence.csv", index=False)
+
+    causal_rates = dict(zip(incidence["segment"], incidence["causal_rate_treated"]))
+    observed_rates = economics.purchase_rates_by_segment(
         df, segment, SEGMENTS, prepare.TREATMENT, prepare.OUTCOME
     )
-    econ = economics.segment_economics(hte, rates, assumptions)
+    for _, r in incidence.iterrows():
+        print(f"  {r['segment']:<12} purchase rate: observed(treated) "
+              f"{r['observed_treated_rate']:.3f} vs causal do(T=1) "
+              f"{r['causal_rate_treated']:.3f} "
+              f"(lift {r['incidence_lift']:+.3f})")
+
+    econ = economics.segment_economics(
+        hte, causal_rates, assumptions, observed_rates=observed_rates
+    )
     econ.to_csv(RESULTS / "economics.csv", index=False)
     print(f"  assuming {assumptions.gross_margin:.0%} gross margin, "
           f"${assumptions.shipping_cost_per_order:.2f}/order shipping cost")

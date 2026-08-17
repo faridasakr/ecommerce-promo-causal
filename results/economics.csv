@@ -1,4 +1,4 @@
-segment,incremental_revenue,gross_profit,shipping_subsidy,net_contribution,profitable,breakeven_shipping_cost,breakeven_gross_margin,treated_purchase_rate,net_contribution_low,net_contribution_high,sign_is_certain
-low spend,7.98,3.59,-2.62,0.98,True,8.92,0.328,0.402,0.6,1.14,True
-mid spend,7.12,3.21,-3.25,-0.04,False,6.41,0.456,0.5,-0.32,0.28,False
-high spend,4.01,1.81,-4.11,-2.31,False,2.85,1.025,0.633,-2.89,-1.72,True
+segment,incremental_revenue,gross_profit,shipping_subsidy,net_contribution,profitable,breakeven_shipping_cost,breakeven_gross_margin,causal_purchase_rate,observed_treated_rate,rate_confounding_gap,subsidy_if_observed_rate,net_contribution_low,net_contribution_high,sign_is_certain
+low spend,7.98,3.59,-2.3,1.29,True,10.14,0.288,0.354,0.402,0.048,-2.62,0.91,1.45,True
+mid spend,7.12,3.21,-2.95,0.25,True,7.06,0.414,0.454,0.5,0.046,-3.25,-0.02,0.57,False
+high spend,4.01,1.81,-3.89,-2.09,False,3.01,0.97,0.599,0.633,0.034,-4.11,-2.67,-1.49,True

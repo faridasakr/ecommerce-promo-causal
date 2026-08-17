@@ -187,6 +187,55 @@ def heterogeneous_effects(
     return pd.DataFrame(rows)
 
 
+def causal_incidence_by_segment(
+    X: np.ndarray,
+    t: np.ndarray,
+    purchased: np.ndarray,
+    segment: np.ndarray,
+    labels: list[str],
+    seed: int = 0,
+) -> pd.DataFrame:
+    """Causal purchase incidence per segment, on a binary purchase indicator.
+
+    The economics layer needs P(purchase | do(T=1)) -- how many orders you would
+    actually be subsidising if the segment were treated. The OBSERVED purchase
+    rate among treated customers is not that quantity: treated customers
+    self-selected, and the traits that drove uptake also drive purchasing, so
+    the observed rate is confounded upward.
+
+    Reuses the same cross-fitted AIPW machinery as the revenue estimate, applied
+    to `purchased` instead of revenue. Returns E[purchase(0)], E[purchase(1)],
+    the causal incidence lift, and the observed treated rate for comparison.
+    """
+    from estimators import aipw_arm_means
+
+    rows = []
+    for k, label in enumerate(labels):
+        m = segment == k
+        observed = float(purchased[m & (t == 1)].mean()) if (m & (t == 1)).any() else np.nan
+
+        if m.sum() < 500 or t[m].sum() < 50:
+            rows.append({
+                "segment": label,
+                "observed_treated_rate": observed,
+                "causal_rate_untreated": np.nan,
+                "causal_rate_treated": np.nan,
+                "incidence_lift": np.nan,
+            })
+            continue
+
+        p0, p1 = aipw_arm_means(X[m], t[m], purchased[m], seed=seed)
+        rows.append({
+            "segment": label,
+            "observed_treated_rate": observed,
+            "causal_rate_untreated": p0,
+            "causal_rate_treated": p1,
+            "incidence_lift": p1 - p0,
+        })
+
+    return pd.DataFrame(rows)
+
+
 def unmeasured_confounding_stress_test(
     X: np.ndarray,
     t: np.ndarray,

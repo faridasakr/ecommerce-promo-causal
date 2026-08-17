@@ -194,6 +194,17 @@ def aipw(X, t, y, seed: int = 0, n_folds: int = 2, **kw) -> float:
     K-1 folds and predict on the held-out fold, which removes it. This is the
     Chernozhukov et al. double/debiased ML recipe.
     """
+    score1, score0 = _aipw_scores(X, t, y, seed=seed, n_folds=n_folds)
+    return float(np.mean(score1 - score0))
+
+
+def _aipw_scores(X, t, y, seed: int = 0, n_folds: int = 2):
+    """Cross-fitted doubly robust scores, trimmed to common support.
+
+    Returns (score1, score0). Their means estimate E[Y(1)] and E[Y(0)]; their
+    difference is the AIPW ATE. Kept as one code path so the effect and the arm
+    levels can never come from different fits.
+    """
     n = len(y)
     rng = np.random.default_rng(seed)
     folds = rng.permutation(n) % n_folds
@@ -220,7 +231,24 @@ def aipw(X, t, y, seed: int = 0, n_folds: int = 2, **kw) -> float:
 
     score1 = mu1_ + t_ * (y_ - mu1_) / ps_
     score0 = mu0_ + (1 - t_) * (y_ - mu0_) / (1 - ps_)
-    return float(np.mean(score1 - score0))
+    return score1, score0
+
+
+def aipw_arm_means(X, t, y, seed: int = 0, n_folds: int = 2) -> tuple[float, float]:
+    """Cross-fitted estimates of (E[Y(0)], E[Y(1)]) from the same nuisance fits.
+
+    Used for the incidence rate in the economics layer. The *observed* purchase
+    rate among treated customers is confounded -- treated customers selected
+    themselves, and the same traits that drove uptake drive purchasing -- so it
+    overstates how many orders a promo would actually have to subsidise.
+    E[Y(1)] is the causal counterpart: what the purchase rate would be if the
+    whole segment were treated.
+
+    By construction mean(score1) - mean(score0) is exactly the AIPW ATE, so the
+    arm levels and the effect are mutually consistent.
+    """
+    score1, score0 = _aipw_scores(X, t, y, seed=seed, n_folds=n_folds)
+    return float(np.mean(score0)), float(np.mean(score1))
 
 
 ESTIMATORS = {
