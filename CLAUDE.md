@@ -4,7 +4,7 @@ Context for Claude Code working in this repository.
 
 ## What this is
 
-A portfolio project for a senior Data Scientist job search: a causal study of an e-commerce free-shipping promotion, built on synthetic data with a **planted causal effect** so every estimator can be scored against a known truth rather than argued about.
+A causal study of an e-commerce free-shipping promotion, built on synthetic data with a **planted causal effect** so every estimator can be scored against a known truth rather than argued about.
 
 The headline result: a naive difference in means says the promo drove **$23.03** per customer; cross-fitted AIPW says **$6.42** (95% CI $5.98–$7.16); the planted truth is **$5.87**. A 3.6× overstatement, driven entirely by self-selection into the promo.
 

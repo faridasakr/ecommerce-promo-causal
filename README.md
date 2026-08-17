@@ -206,7 +206,7 @@ git clone <repo> && cd ecommerce-promo-causal
 make setup          # venv + dependencies
 make data           # generate the synthetic dataset
 make analysis       # full causal pipeline (~4 min with 200 bootstraps)
-make test           # 23 fast tests
+make test           # 25 fast tests
 make test-all       # + 2 full-data integration tests
 make app            # launch the Streamlit demo
 ```
@@ -215,6 +215,6 @@ Set `ANTHROPIC_API_KEY` to enable the live LLM explanation layer; without it, `e
 
 ## Tests
 
-25 tests across two tiers — fast unit/property tests on an 8k fixture, plus full-data integration tests (`-m slow`) with a tighter 15% tolerance.
+27 tests across two tiers — fast unit/property tests on an 8k fixture, plus full-data integration tests (`-m slow`) with a tighter 15% tolerance.
 
 Coverage includes: deterministic generation; confounding is genuinely strong (max |SMD| > 0.3); the naive estimator *is* badly biased; IPW/AIPW recover the planted effect; AIPW is reproducible at a fixed seed; propensity scores contain no NaN/degenerate values; post-trim weights stay bounded; all SMDs pass after weighting; both propensity models are diagnosed; cleaning handles currency/duplicates/missingness without mutating the caller's frame; the economics layer flags loss-making segments and reports break-evens; both guardrails fire correctly and don't false-positive; the system prompt retains its refusal and CI rules; and no analysis module reads the answer key.
