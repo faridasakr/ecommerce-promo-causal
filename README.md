@@ -260,7 +260,21 @@ Explanation-layer failure
 │       fixed by comparing floats to the cent
 └── regex validators cannot parse negation or hedging — now a backstop behind
     schema validation, not the primary defence
+
+Deployment error
+├── stale cache after redeploy    @st.cache_data keys on the decorated
+│                                 function's source, not the files it reads.
+│                                 A redeploy served the previous artefacts'
+│                                 cached parse against new tab code, throwing
+│                                 KeyError on a key that existed in the
+│                                 committed data. Fixed by fingerprinting
+│                                 artefact mtime+size into the cache key.
+└── data contract untested        three artefact changes broke the app while
+                                  every test passed; src/artifacts.py now
+                                  declares the contract and tests enforce it.
 ```
+
+The cache entry is worth dwelling on, because the symptom pointed away from the cause. The key was present and top-level in the committed artefact, and the app rendered correctly on a fresh local process — so the obvious hypotheses (wrong file, wrong nesting, renamed key) were all false, and "just run it locally" would not have reproduced it. What made the failure possible was that the *loader's source had not changed*, only the data it reads and the code that consumes the result. Any cache keyed on code rather than data has this hole.
 
 ## Unmeasured-confounding stress test
 
