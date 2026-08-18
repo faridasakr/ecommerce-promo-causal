@@ -105,10 +105,17 @@ with tab1:
     scored = estimates[estimates["true_value"].notna() & estimates["ci_low"].notna()]
     n_cover = int(scored["ci_covers_truth"].sum())
     st.info(
-        f"**Note the `target_estimand` column.** Propensity score matching targets "
-        f"the ATT (effect among those who used the promo); everything else targets "
-        f"the ATE. Each is scored against its own true value — comparing them as if "
-        f"they estimated the same quantity would be a category error.\n\n"
+        f"**Note the `target_estimand` column — the five rows are not all "
+        f"estimating the same thing.** Naive is a descriptive contrast between "
+        f"self-selected groups and targets no causal quantity, so it has no true "
+        f"value to be scored against. OLS reports an adjusted treatment "
+        f"coefficient, which under heterogeneous effects need not equal the "
+        f"population ATE. PSM targets the ATT — the effect among those who used "
+        f"the promo — and is the one row without an interval, because the "
+        f"ordinary bootstrap is invalid for fixed-NN matching. IPW and AIPW "
+        f"target the ATE over the units each retained after trimming. Each is "
+        f"scored against its own target; reading down the column as if it were "
+        f"one quantity would be a category error.\n\n"
         f"Also: in this realization {n_cover} of {len(scored)} nominal 95% intervals "
         f"contained their target. That is what happened in this one sample, not a "
         f"measured coverage rate — establishing a rate would need a simulation study "

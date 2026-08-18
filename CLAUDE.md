@@ -43,7 +43,7 @@ These are the load-bearing design decisions. Each has a test guarding it; if a c
 
 1. **Only `run_analysis.py` reads the ground-truth answer key**, and only in the final scoring step. No estimator, diagnostic, cleaning, or economics module may reference it. Guarded by `test_ground_truth_not_read_by_analysis_modules`, which parses each module's AST.
 
-2. **PSM targets the ATT, everything else targets the ATE**, and each is scored against its own true value. Never collapse these into one column. Guarded by `test_psm_targets_att_not_ate`.
+2. **The five estimators do not share an estimand**, and each is scored against its own true value. Never collapse these into one column. PSM targets the ATT; IPW and AIPW target the ATE over their own trimmed populations; OLS reports an adjusted treatment coefficient that under heterogeneous effects need not equal the ATE; naive is a descriptive, non-causal contrast with no true value at all. Guarded by `test_psm_targets_att_not_ate`.
 
    Scoring goes further: each estimator is compared to the mean individual effect over *the units it actually used*, derived from its own mask (`ipw_trim_mask`, `aipw_trim_mask`, `psm_matched_treated`). Trimming and matching change the estimand, so a shared full-population target would grade estimators against a population they never estimated. `tau_individual.npy` must be joined on `customer_id` — the raw CSV is shuffled, and positional alignment fails silently.
 

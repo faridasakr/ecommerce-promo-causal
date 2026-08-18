@@ -9,8 +9,17 @@ write-up can show what each layer of adjustment buys:
   4. ipw                -- stabilised inverse probability weighting.
   5. aipw               -- augmented IPW (doubly robust). The headline estimate.
 
-All estimators return an Estimate with a bootstrap confidence interval so the
-comparison table carries uncertainty, not just point estimates.
+Each returns an Estimate carrying its point estimate, its declared target
+estimand, and an interval where the ordinary nonparametric bootstrap is
+appropriate. PSM is reported without one: the bootstrap is inconsistent for
+fixed-NN matching (Abadie & Imbens 2008), and the reason travels with the
+result in `ci_note` rather than being left as an unexplained gap.
+
+Note also that "estimand" is not uniform across the five. Naive is a
+descriptive contrast between self-selected groups and targets no causal
+quantity at all; OLS reports an adjusted treatment coefficient which, with no
+treatment-covariate interactions and heterogeneous effects, is a weighted
+average of segment effects rather than a guaranteed population ATE.
 """
 
 from __future__ import annotations
