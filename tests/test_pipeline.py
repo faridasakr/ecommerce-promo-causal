@@ -20,7 +20,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-SRC = Path(__file__).resolve().parents[1] / "src"
+ROOT_DIR = Path(__file__).resolve().parents[1]
+SRC = ROOT_DIR / "src"
 sys.path.insert(0, str(SRC))
 
 import diagnostics  # noqa: E402
@@ -1088,3 +1089,114 @@ def test_readme_estimator_table_matches_estimates(results_present):
             "never explains it -- a missing interval needs its justification "
             "next to the table, not only in the CSV"
         )
+
+
+# ---------------------------------------------------- app data contract
+# Three artefact changes in a row broke the Streamlit app while every test
+# stayed green: the pipeline's outputs were checked, the README's numbers were
+# checked, but nothing checked that the app could still find what it reads by
+# name. These tests verify the contract without rendering Streamlit.
+import artifacts  # noqa: E402
+
+
+def test_app_artefacts_all_exist():
+    """Every file the app opens must be present."""
+    d = artifacts.results_dir(ROOT_DIR)
+    missing = [n for n in artifacts.JSON_FILES + artifacts.CSV_FILES if not (d / n).exists()]
+    assert not missing, f"the app opens files that do not exist: {missing}"
+
+
+def test_app_data_contract_is_satisfied():
+    """Every key and column the app reads by name must be in the artefacts."""
+    problems = artifacts.check_contract(ROOT_DIR)
+    assert not problems, "the app would fail on these:\n  " + "\n  ".join(problems)
+
+
+def test_contract_catches_a_missing_top_level_key(tmp_path):
+    """The regression that took the demo down: policy_economics disappears.
+
+    Reproduces it directly -- an artefact set that is valid except for the one
+    key the app added -- and asserts the contract check names it.
+    """
+    src = artifacts.results_dir(ROOT_DIR)
+    dst = tmp_path / "results"
+    dst.mkdir()
+    for name in artifacts.JSON_FILES + artifacts.CSV_FILES:
+        (dst / name).write_text((src / name).read_text())
+
+    summary = json.loads((dst / "stakeholder_summary.json").read_text())
+    del summary["policy_economics"]
+    (dst / "stakeholder_summary.json").write_text(json.dumps(summary))
+
+    problems = artifacts.check_contract(tmp_path)
+    assert any("policy_economics" in p for p in problems), problems
+
+
+def test_contract_catches_a_missing_nested_key_and_column(tmp_path):
+    """Nested keys and CSV columns are read by name too, so both must be checked."""
+    src = artifacts.results_dir(ROOT_DIR)
+    dst = tmp_path / "results"
+    dst.mkdir()
+    for name in artifacts.JSON_FILES + artifacts.CSV_FILES:
+        (dst / name).write_text((src / name).read_text())
+
+    summary = json.loads((dst / "stakeholder_summary.json").read_text())
+    del summary["policy_economics"]["targeted_offer"]["per_targeted_customer"]
+    del summary["recommendation"]["decision_rule"]
+    (dst / "stakeholder_summary.json").write_text(json.dumps(summary))
+
+    est = pd.read_csv(dst / "estimates.csv").drop(columns=["ci_covers_truth"])
+    est.to_csv(dst / "estimates.csv", index=False)
+
+    problems = artifacts.check_contract(tmp_path)
+    assert any("per_targeted_customer" in p for p in problems), problems
+    assert any("decision_rule" in p for p in problems), problems
+    assert any("ci_covers_truth" in p for p in problems), problems
+
+
+def test_contract_catches_a_missing_file(tmp_path):
+    dst = tmp_path / "results"
+    dst.mkdir()
+    problems = artifacts.check_contract(tmp_path)
+    assert len(problems) == len(artifacts.JSON_FILES) + len(artifacts.CSV_FILES)
+    assert all("missing artefact" in p for p in problems)
+
+
+def test_ask_returns_the_shape_the_app_destructures():
+    """The assistant tab reads these keys directly off ask()'s return value."""
+    from explain import ask
+
+    out = ask("Did the promotion work?")
+    for k in artifacts.ASK_KEYS:
+        assert k in out, f"ask() no longer returns {k!r}, which the app reads"
+    assert isinstance(out["rendered"], bool)
+    assert isinstance(out["errors"], list)
+    assert isinstance(out["warnings"], list)
+    if out["rendered"]:
+        assert isinstance(out["answer"], str) and out["answer"]
+        assert isinstance(out["structured"], dict)
+
+
+def test_artefact_fingerprint_changes_when_an_artefact_changes(tmp_path):
+    """The cache key must turn over when results/ is rewritten.
+
+    st.cache_data keys on the loader's SOURCE plus its arguments, never on the
+    files it opens. Without a content-derived argument a redeployed app serves
+    a stale parse against new code -- which is exactly what produced the
+    production KeyError.
+    """
+    src = artifacts.results_dir(ROOT_DIR)
+    dst = tmp_path / "results"
+    dst.mkdir()
+    for name in artifacts.JSON_FILES + artifacts.CSV_FILES:
+        (dst / name).write_text((src / name).read_text())
+
+    before = artifacts.artefact_fingerprint(tmp_path)
+    summary = json.loads((dst / "stakeholder_summary.json").read_text())
+    summary["a_new_key"] = 1
+    (dst / "stakeholder_summary.json").write_text(json.dumps(summary) + "   ")
+
+    assert artifacts.artefact_fingerprint(tmp_path) != before, (
+        "fingerprint did not change after an artefact was rewritten -- the "
+        "Streamlit cache would keep serving stale data"
+    )

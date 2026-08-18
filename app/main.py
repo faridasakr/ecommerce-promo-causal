@@ -18,30 +18,42 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+import artifacts  # noqa: E402  -- needs the src path above
+
 st.set_page_config(page_title="Did Free Shipping Work?", layout="wide")
 
 
 @st.cache_data
-def load_results():
+def load_results(fingerprint: str):
     """Two summaries, kept apart on purpose.
 
     `summary` is the stakeholder artefact and carries NO ground truth -- it is
     what the assistant tab passes to the LLM. `evaluation` holds the planted
     truth and per-estimator bias, and is used only by the estimator-comparison
     tab, which is explicitly a scoring view.
+
+    `fingerprint` is not used in the body: it exists purely as part of the
+    cache key. `@st.cache_data` hashes this function's SOURCE and its
+    arguments, never the files it opens, so without it a redeployed app keeps
+    serving a stale parse of the previous artefacts. That is precisely how
+    `policy_economics` raised KeyError in production while working locally --
+    the loader's source had not changed, so the cache never turned over.
     """
-    with open(ROOT / "results" / "stakeholder_summary.json") as f:
-        summary = json.load(f)
-    with open(ROOT / "results" / "evaluation_summary.json") as f:
-        evaluation = json.load(f)
-    estimates = pd.read_csv(ROOT / "results" / "estimates.csv")
-    hte = pd.read_csv(ROOT / "results" / "heterogeneity.csv")
-    balance = pd.read_csv(ROOT / "results" / "balance.csv")
-    sens = pd.read_csv(ROOT / "results" / "stress_test.csv")
-    return summary, evaluation, estimates, hte, balance, sens
+    del fingerprint  # cache key only
+    art = artifacts.load_artifacts(ROOT)
+    return (
+        art["stakeholder_summary.json"],
+        art["evaluation_summary.json"],
+        art["estimates.csv"],
+        art["heterogeneity.csv"],
+        art["balance.csv"],
+        art["stress_test.csv"],
+    )
 
 
-summary, evaluation, estimates, hte, balance, sens = load_results()
+summary, evaluation, estimates, hte, balance, sens = load_results(
+    artifacts.artefact_fingerprint(ROOT)
+)
 
 st.title("Did free shipping actually work?")
 st.caption(
