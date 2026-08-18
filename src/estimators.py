@@ -272,10 +272,27 @@ ESTIMATORS = {
 # ground-truth key, so the comparison table is apples-to-apples.
 ESTIMANDS = {
     "Naive difference in means": "descriptive difference in means — non-causal",
-    "OLS adjusted treatment coefficient": "ATE",
+    "OLS adjusted treatment coefficient": "model-dependent adjusted coefficient",
     "Propensity score matching": "ATT",
     "IPW (stabilised)": "ATE",
     "AIPW (cross-fitted, doubly robust)": "ATE",
+}
+
+
+# Estimators whose true_value is a FORMAL target -- the quantity they are
+# constructed to estimate, so a miss is evidence about the estimator.
+#
+# OLS is deliberately absent. It is scored against the full-sample ATE as a
+# REFERENCE BENCHMARK, not a formal target: with no treatment-covariate
+# interactions and heterogeneous effects, its coefficient is a weighted average
+# of segment effects with no guarantee of equalling the ATE. Labelling its
+# estimand "ATE" asserted exactly what the surrounding text denied. An interval
+# that misses is therefore not estimator failure and must not enter a coverage
+# count -- the benchmark is reported for comparison and excluded from scoring.
+FORMAL_TARGET = {
+    "Propensity score matching",
+    "IPW (stabilised)",
+    "AIPW (cross-fitted, doubly robust)",
 }
 
 

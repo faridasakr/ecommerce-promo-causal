@@ -283,6 +283,11 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
                 "true_value": None if target is None else round(target, 3),
                 "bias": None if bias is None else round(bias, 3),
                 "abs_pct_error": None if pct is None else round(pct, 1),
+                "true_value_role": (
+                    None if target is None
+                    else "formal target" if r.name in estimators.FORMAL_TARGET
+                    else "reference benchmark (not a guaranteed target)"
+                ),
                 "ci_covers_truth": covers,
             }
         )
@@ -341,10 +346,13 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
             "encouragement or an instrument for uptake.",
         ],
         "estimand_note": (
-            "Propensity score matching targets the ATT -- the effect among "
-            "customers who actually used the promo. Every other estimator "
-            "targets the ATE, the effect if the promo were extended to "
-            "everyone. Trimming and matching also change which customers an "
+            "The five estimators do not share an estimand. Propensity score "
+            "matching targets the ATT -- the effect among customers who "
+            "actually used the promo. IPW and AIPW target the ATE, the "
+            "effect if the promo were extended to everyone. The naive "
+            "difference in means is a descriptive contrast between "
+            "self-selected groups and targets no causal quantity. Trimming "
+            "and matching also change which customers an "
             "estimate refers to, which is recorded per estimator in "
             "target_population. These are different questions and their "
             "answers should not be compared as if they were the same number. "
@@ -402,7 +410,10 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
     # naive has no causal target, PSM has no valid bootstrap interval. This is a
     # count for this one realization, not an estimate of a coverage RATE -- that
     # is a property of the procedure and needs many replications to measure.
-    scored = est_df[est_df["true_value"].notna() & est_df["ci_low"].notna()]
+    scored = est_df[
+        est_df["ci_low"].notna()
+        & (est_df["true_value_role"] == "formal target")
+    ]
     n_covering = int(scored["ci_covers_truth"].sum())
 
     # ------------------------------------------------------------------
@@ -462,7 +473,8 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
     print(f"  planted truth (synthetic data): ${truth['true_ate']:.2f}")
     print(f"  In this realization: {n_covering}/{len(scored)} intervals contained "
           f"their target (not a coverage rate)")
-    print(f"    naive has no causal target; PSM has no valid bootstrap interval")
+    print(f"    excluded: naive (no causal target), OLS (reference benchmark, not a "
+          f"formal target), PSM (no valid bootstrap interval)")
     print(f"\nDECISION: {rec['decision']}")
     print("=" * 72)
     print(f"\nArtefacts written to {RESULTS}/")

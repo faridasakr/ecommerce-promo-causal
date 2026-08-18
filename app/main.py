@@ -86,7 +86,7 @@ st.markdown(
 )
 st.caption(
     f"Because this is synthetic data, the planted causal truth is known: "
-    f"${evaluation['true_ate_revealed']:.2f}. Every estimator below is scored against it. "
+    f"${evaluation['true_ate_revealed']:.2f}. The causal estimators below are scored against it. "
     f"On real data that column would not exist — which is exactly why the "
     f"diagnostics and assumptions carry the weight."
 )
@@ -97,12 +97,16 @@ tab1, tab2, tab5, tab3, tab4 = st.tabs(
 )
 
 with tab1:
-    st.subheader("Every estimator, scored against the known truth")
+    st.subheader("Causal estimators compared with the known synthetic ground truth")
     st.dataframe(estimates, width="stretch", hide_index=True)
     st.bar_chart(estimates.set_index("estimator")["estimate"])
-    # Only rows with BOTH an interval and a causal target can be assessed:
-    # naive has no causal target, PSM has no valid bootstrap interval.
-    scored = estimates[estimates["true_value"].notna() & estimates["ci_low"].notna()]
+    # Only formal targets count: naive has none, OLS is scored against the ATE
+    # as a reference benchmark rather than a target it must hit, and PSM has no
+    # valid bootstrap interval.
+    scored = estimates[
+        estimates["ci_low"].notna()
+        & (estimates["true_value_role"] == "formal target")
+    ]
     n_cover = int(scored["ci_covers_truth"].sum())
     st.info(
         f"**Note the `target_estimand` column — the five rows are not all "
@@ -110,7 +114,10 @@ with tab1:
         f"self-selected groups and targets no causal quantity, so it has no true "
         f"value to be scored against. OLS reports an adjusted treatment "
         f"coefficient, which under heterogeneous effects need not equal the "
-        f"population ATE. PSM targets the ATT — the effect among those who used "
+        f"population ATE — it is compared with the ATE as a reference benchmark "
+        f"and excluded from the coverage count below, since a gap there reflects "
+        f"the specification rather than estimator error. PSM targets the ATT — "
+        f"the effect among those who used "
         f"the promo — and is the one row without an interval, because the "
         f"ordinary bootstrap is invalid for fixed-NN matching. IPW and AIPW "
         f"target the ATE over the units each retained after trimming. Each is "

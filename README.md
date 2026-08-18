@@ -99,7 +99,7 @@ So the pipeline separates segments where effect modification is planted, and doe
 | Estimator | Target estimand | Target population | Estimate | 95% CI | True value | Error |
 |---|---|---|---:|---:|---:|---:|
 | Naive difference in means | descriptive difference in means — non-causal | full sample | $23.03 | [22.40, 23.57] | — | — |
-| OLS adjusted treatment coefficient | ATE | full sample | $7.09 | [6.60, 7.73] | $5.87 | +21% |
+| OLS adjusted treatment coefficient | model-dependent adjusted coefficient | full sample | $7.09 | [6.60, 7.73] | $5.87 | +21% |
 | Propensity score matching | **ATT** | **matched treated** | $7.08 | — | **$5.98** | +18% |
 | IPW (stabilised) | ATE | trimmed (logistic) | $6.38 | [5.68, 7.27] | $5.87 | +9% |
 | **AIPW (cross-fitted, doubly robust)** | ATE | trimmed (cross-fit) | **$6.42** | [5.98, 7.16] | $5.87 | +9% |
@@ -108,7 +108,7 @@ So the pipeline separates segments where effect modification is planted, and doe
 
 The **estimated causal effect** is **$6.42 per customer** (95% CI $5.98–$7.16), under conditional exchangeability, positivity, and SUTVA. Because this is synthetic data, the planted truth is known to be **$5.87** — on real data that column would not exist, which is precisely why the diagnostics and stated assumptions carry the weight.
 
-**On the OLS row:** it is the adjusted treatment coefficient from `Y ~ T + X` with no treatment-covariate interactions. Because the effect is heterogeneous under this DGP, that coefficient is a weighted average of segment effects and is not guaranteed to equal the population ATE. The model is deliberately left unexpanded — it is the plain-vanilla adjustment most analyses actually run, and its gap from the ATE is part of what the comparison shows.
+**On the OLS row:** it is the adjusted treatment coefficient from `Y ~ T + X` with no treatment-covariate interactions. Because the effect is heterogeneous under this DGP, that coefficient is a weighted average of segment effects and is not guaranteed to equal the population ATE. The model is deliberately left unexpanded — it is the plain-vanilla adjustment most analyses actually run, and its gap from the ATE is part of what the comparison shows. Because that gap is a property of the specification rather than estimator error, OLS is scored against the ATE as a **reference benchmark** and excluded from the interval-coverage count.
 
 **On the naive row:** it has no true value because it is not estimating one. A difference between two self-selected groups is a description of who opted in, not an attempt at a causal quantity. Scoring it against the ATE would imply it was aiming at the ATE and missing, when the honest statement is that it targets nothing causal at all. Its $23.03 is still the number most analyses would report, which is the point of showing it.
 
@@ -126,7 +126,7 @@ A policy question about extending the promo to everyone needs the ATE; a questio
 
 That is not a bug. Bootstrap intervals quantify *sampling variability*: how much the estimate would move if you redrew the sample. They say nothing about *model misspecification* — systematic bias from a propensity model that doesn't capture the true assignment mechanism. So a tight interval around a slightly biased estimate is exactly what you should expect, and exactly what a stakeholder will misread as precision.
 
-In this run, 1 of the 3 intervals contained its target. That is what happened in this one sample — not a measured coverage rate. Calling it "under-coverage" would claim something about how the procedure behaves in repeated sampling, which a single realization cannot establish; that would take a simulation study over many replications. The mechanism above is the transferable part, and it holds regardless of what this particular draw did.
+In this run, 1 of the 2 intervals with a formal causal target contained it. That is what happened in this one sample — not a measured coverage rate. Calling it "under-coverage" would claim something about how the procedure behaves in repeated sampling, which a single realization cannot establish; that would take a simulation study over many replications. The mechanism above is the transferable part, and it holds regardless of what this particular draw did.
 
 ---
 
@@ -227,13 +227,13 @@ data/raw/customers.csv
 
 **Decision:** Carry the causal estimate through to contribution margin rather than stopping at incremental revenue.
 **Alternatives:** Report the effect size and let stakeholders do the economics.
-**Evidence:** The revenue ranking (low > mid > high) and the profit ranking are *not* the same decision — mid-spend is revenue-positive and contribution-negative, because subsidy scales with order frequency rather than basket size.
+**Evidence:** The revenue ranking (low > mid > high) and the profit ranking are *not* the same decision — high-spend is revenue-positive and contribution-negative, because subsidy scales with order frequency rather than basket size; mid-spend is marginally contribution-positive and highly sensitive to the margin and shipping assumptions.
 **Cost:** Requires margin and shipping-cost assumptions, which are declared and reported with break-even thresholds so they can be challenged.
 **Conclusion:** Ship it. "The uptake effect is $6.42" is a finding; "these segments are the strongest candidates for a targeted-offer experiment" is a decision.
 
 ## Error taxonomy
 
-In this realization, 2 of the 3 nominal 95% intervals did not contain their target. That is non-coverage in one sample, **not** an estimate of the procedure's coverage rate — establishing a rate would require a simulation study over many replications.
+In this realization, 1 of the 2 nominal 95% intervals with a formal causal target did not contain it. That is non-coverage in one sample, **not** an estimate of the procedure's coverage rate — establishing a rate would require a simulation study over many replications.
 
 ```
 Estimation error
@@ -242,7 +242,7 @@ Estimation error
 │   └── may reflect finite-sample variation and/or nuisance-model
 │       misspecification; their contributions are not separately
 │       identified from this realization
-├── intervals missing their target          2 of 3 in this realization
+├── intervals missing their target          1 of 2 in this realization
 │   └── incl. AIPW: 9% point error, yet its interval misses
 │   └── bootstrap CIs capture sampling noise, not model bias  ← see "the lesson"
 └── estimand drift from trimming            0.24% of sample

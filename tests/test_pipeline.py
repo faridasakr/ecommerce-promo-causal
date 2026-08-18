@@ -109,11 +109,20 @@ def test_psm_targets_att_not_ate(data):
     # it is a descriptive difference between self-selected groups.
     assert "non-causal" in estimators.ESTIMANDS["Naive difference in means"]
     assert "ATE" not in estimators.ESTIMANDS["Naive difference in means"]
+    # OLS has its own label: an adjusted coefficient is not a guaranteed ATE.
+    assert estimators.ESTIMANDS["OLS adjusted treatment coefficient"] == (
+        "model-dependent adjusted coefficient"
+    )
     assert all(
         estimators.ESTIMANDS[n] == "ATE"
-        for n in estimators.ESTIMATORS
-        if n not in ("Propensity score matching", "Naive difference in means")
+        for n in ("IPW (stabilised)", "AIPW (cross-fitted, doubly robust)")
     )
+    # Only formal targets may enter a coverage count.
+    assert estimators.FORMAL_TARGET == {
+        "Propensity score matching",
+        "IPW (stabilised)",
+        "AIPW (cross-fitted, doubly robust)",
+    }, "OLS must not be a formal target -- it is a reference benchmark"
     X, t, y, names, truth = data
     assert "true_att" in truth and truth["true_att"] != truth["true_ate"]
 

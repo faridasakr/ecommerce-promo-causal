@@ -15,11 +15,12 @@
       "true_value": null,
       "bias": null,
       "abs_pct_error": null,
+      "true_value_role": null,
       "ci_covers_truth": null
     },
     {
       "estimator": "OLS adjusted treatment coefficient",
-      "target_estimand": "ATE",
+      "target_estimand": "model-dependent adjusted coefficient",
       "target_population": "full sample",
       "n_target": 50000,
       "estimate": 7.086,
@@ -29,6 +30,7 @@
       "true_value": 5.867,
       "bias": 1.218,
       "abs_pct_error": 20.8,
+      "true_value_role": "reference benchmark (not a guaranteed target)",
       "ci_covers_truth": false
     },
     {
@@ -43,6 +45,7 @@
       "true_value": 5.98,
       "bias": 1.099,
       "abs_pct_error": 18.4,
+      "true_value_role": "formal target",
       "ci_covers_truth": null
     },
     {
@@ -57,6 +60,7 @@
       "true_value": 5.869,
       "bias": 0.507,
       "abs_pct_error": 8.6,
+      "true_value_role": "formal target",
       "ci_covers_truth": true
     },
     {
@@ -71,13 +75,14 @@
       "true_value": 5.868,
       "bias": 0.547,
       "abs_pct_error": 9.3,
+      "true_value_role": "formal target",
       "ci_covers_truth": false
     }
   ],
   "scoring_note": "Each estimator is scored against the mean individual treatment effect over the units it actually used: the full sample for OLS, the trimmed sample for IPW and AIPW (which trim under different propensity models), and the matched treated units for PSM, which targets the ATT. The naive difference in means is a descriptive contrast between self-selected groups and has no causal target, so it is reported without a true value or bias.",
   "intervals_containing_target": {
     "n_containing": 1,
-    "n_assessable": 3,
+    "n_assessable": 2,
     "excluded": {
       "Naive difference in means": "no causal target",
       "Propensity score matching": "no valid bootstrap interval"

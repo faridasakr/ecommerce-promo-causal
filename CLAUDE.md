@@ -78,18 +78,18 @@ If a change moves these materially, investigate before accepting:
 | Estimator | Estimand | Target population | n | Estimate | True |
 |---|---|---|---:|---:|---:|
 | Naive | descriptive, non-causal | full sample | 50,000 | 23.03 | — |
-| OLS coef | ATE* | full sample | 50,000 | 7.09 | 5.867 |
+| OLS coef | model-dependent adjusted coefficient* | full sample | 50,000 | 7.09 | 5.867* |
 | PSM | ATT | matched treated | 18,664 | 7.08 (no CI) | 5.980 |
 | IPW | ATE | trimmed (logistic) | 49,879 | 6.38 | 5.869 |
 | AIPW | ATE | trimmed (cross-fit) | 49,972 | 6.42 | 5.868 |
 
-*OLS is `Y ~ T + X` with no interactions; under heterogeneous effects its coefficient is not guaranteed to equal the population ATE. Not expanded on purpose.
+*OLS is `Y ~ T + X` with no interactions; under heterogeneous effects its coefficient is not guaranteed to equal the population ATE. Not expanded on purpose. Its true_value is the full-sample ATE as a REFERENCE BENCHMARK (`true_value_role`), not a formal target, so it is excluded from the coverage count — see `estimators.FORMAL_TARGET`.
 
 Each truth is the mean of `tau_individual.npy` over the units that estimator used, computed at scoring time. Naive has no causal target and is reported with a dash. The four targets differ only in the third decimal under this DGP — that is a property of the planted effects, not a reason to collapse them back into one column.
 
 Balance: worst \|SMD\| 0.660 → 0.007 (logistic), 0.042 (cross-fitted GBM).
 
-Intervals containing their target: 1 of 3 in this realization (naive has no causal target; PSM has no valid bootstrap interval). Report this as a count for this sample, never as a coverage *rate* — a rate is a property of the procedure under repeated sampling and would need a simulation study. "Under-coverage" is the wrong word and must not reappear.
+Intervals containing their target: 1 of 2 in this realization (excluded: naive, no causal target; OLS, reference benchmark not a formal target; PSM, no valid bootstrap interval). Report this as a count for this sample, never as a coverage *rate* — a rate is a property of the procedure under repeated sampling and would need a simulation study. "Under-coverage" is the wrong word and must not reappear.
 
 Segment contribution: low +$1.29 [+1.05, +1.51], mid +$0.25 [+0.03, +0.51], high −$2.09 [−2.49, −1.40].
 

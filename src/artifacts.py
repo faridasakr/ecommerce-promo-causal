@@ -73,7 +73,10 @@ ASSUMPTION_KEYS = ["gross_margin", "shipping_cost_per_order", "source"]
 
 # Columns the app selects by name.
 CSV_COLUMNS = {
-    "estimates.csv": ["estimator", "estimate", "true_value", "ci_low", "ci_covers_truth"],
+    "estimates.csv": [
+        "estimator", "estimate", "true_value", "true_value_role",
+        "ci_low", "ci_covers_truth",
+    ],
     "heterogeneity.csv": ["segment", "ate"],
     "balance.csv": ["covariate", "smd_unadjusted", "smd_weighted"],
     "stress_test.csv": ["gamma", "ate_under_confounding"],
