@@ -16,7 +16,7 @@
 
 **Low- and mid-spend customers show positive incremental economics under the stated assumptions, making them the strongest candidates for a targeted-offer experiment; high-spend shows negative economics. Mid-spend clears break-even by only three cents at the lower bound, and its verdict is hostage to the cost assumptions rather than to the statistics — see below before acting on it.**
 
-**These are effects of promo *uptake*, not of *offering* the promo.** The treatment here is whether a customer used free shipping, so every figure describes customers who took it up. The policy question — whom to offer it to — is an intention-to-treat quantity this observational design does not identify, and which is generally smaller. Read the segment results as evidence about where an offer experiment is most likely to pay, not as a directly identified offer effect.
+**These are effects of promo *uptake*, not of *offering* the promo.** The treatment is whether a customer used free shipping. The headline AIPW figure is the average causal effect of setting uptake to 1 versus 0 across the retained analysis population — not an effect within some subgroup of likely takers. PSM is the one row that does describe treated users specifically, because the ATT is defined that way. Neither identifies the intention-to-treat effect of *offering* the promotion, which is the policy question and would require randomised encouragement or an instrument for uptake. Read the segment results as evidence about where an offer experiment is most likely to pay, not as a directly identified offer effect.
 
 **What the policy is worth, in dollars.** Per-customer contribution is not the decision-relevant number on its own — segments differ in size, so the policy total is what matters:
 
@@ -298,7 +298,9 @@ The cache entry is worth dwelling on, because the symptom pointed away from the 
 - Contribution analysis is static: no acquisition, retention, or LTV effects, which would need a longitudinal design.
 - No temporal component — difference-in-differences on pre/post data would identify the effect under weaker assumptions.
 
-**What this estimates, and what it doesn't.** The treatment is promo *uptake*, so the estimand is the effect of using free shipping among customers who could use it. The policy question — should we offer free shipping, and to whom — is an intention-to-treat question about being *offered* the promo, which is not the same quantity. With one-sided non-compliance the uptake effect generally exceeds the offer effect. Identifying the offer effect would need randomised encouragement or an instrument for uptake; neither exists in this observational design. Read the targeting recommendation as 'among customers who would take the offer'.
+**What this estimates, and what it doesn't.** The treatment is promo uptake, not promo offer. The headline AIPW estimate is the average causal effect of setting uptake to 1 versus 0 across the retained analysis population. PSM instead estimates the effect among treated users (ATT). Neither quantity identifies the intention-to-treat effect of being offered the promotion, which would require randomised encouragement or an instrument for uptake.
+
+Note what this deliberately does *not* say. Phrasing the result as an effect "among customers who would take the offer" would name a principal stratum — the takers — and that subgroup is latent: this design gives no way to identify who belongs to it, so no estimate here is defined over it. The uptake effect is a do() quantity over an observed population, which is a different object from a compliance-stratum effect and should not be described as one.
 
 ## Setup
 

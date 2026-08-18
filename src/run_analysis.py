@@ -326,10 +326,18 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
             "Positivity: every customer had a non-zero probability of both using "
             "and not using the promo (checked via overlap; trimmed where violated).",
             "SUTVA: one customer's promo use does not affect another's revenue.",
-            "The treatment is promo UPTAKE, not promo OFFER, so this estimates "
-            "the effect among customers who would take the offer -- not the "
-            "intention-to-treat effect of offering it, which is the actual "
-            "policy question and is generally smaller.",
+            # Deliberately NOT phrased as an effect "among customers who would
+            # take the offer": that names a principal stratum (takers), which
+            # this design does not identify. The AIPW estimate is a do()
+            # quantity over the retained population, not a latent-subgroup
+            # effect.
+            "The treatment is promo uptake, not promo offer. The headline AIPW "
+            "estimate is the average causal effect of setting uptake to 1 "
+            "versus 0 across the retained analysis population. PSM instead "
+            "estimates the effect among treated users (ATT). Neither quantity "
+            "identifies the intention-to-treat effect of being offered the "
+            "promotion, which would require randomised encouragement or an "
+            "instrument for uptake.",
         ],
         "limitations": [
             "Bootstrap intervals quantify sampling variability only, not model "
