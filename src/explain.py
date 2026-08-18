@@ -240,9 +240,9 @@ class StakeholderAnswer(BaseModel):
     answer: str = Field(min_length=1, description="Prose for the stakeholder.")
     headline_estimate: float
     ci: list[float] = Field(min_length=2, max_length=2)
-    segments_to_target: list[str]
-    segments_to_withhold: list[str]
-    segments_uncertain: list[str]
+    segments_positive_economics: list[str]
+    segments_negative_economics: list[str]
+    segments_insufficient_evidence: list[str]
     assumptions: list[str] = Field(min_length=1)
     limitations: list[str] = Field(min_length=1)
 
@@ -278,9 +278,9 @@ def validate_structured(payload: dict, summary: dict) -> tuple[StakeholderAnswer
     # and a model that upgrades an uncertain segment produces a confident,
     # fluent, wrong recommendation that no regex would catch.
     for field, key in (
-        ("segments_to_target", "segments_evidence_supports_targeting"),
-        ("segments_to_withhold", "segments_evidence_says_destroy_contribution"),
-        ("segments_uncertain", "segments_economically_uncertain"),
+        ("segments_positive_economics", "segments_positive_economics"),
+        ("segments_negative_economics", "segments_negative_economics"),
+        ("segments_insufficient_evidence", "segments_insufficient_evidence"),
     ):
         got = sorted(getattr(parsed, field))
         want = sorted(rec.get(key, []))
@@ -415,9 +415,9 @@ def _offline_payload(question: str, s: dict) -> dict:
         "answer": prose,
         "headline_estimate": s["headline_estimate"],
         "ci": list(s["headline_ci"]),
-        "segments_to_target": rec.get("segments_evidence_supports_targeting", []),
-        "segments_to_withhold": rec.get("segments_evidence_says_destroy_contribution", []),
-        "segments_uncertain": rec.get("segments_economically_uncertain", []),
+        "segments_positive_economics": rec.get("segments_positive_economics", []),
+        "segments_negative_economics": rec.get("segments_negative_economics", []),
+        "segments_insufficient_evidence": rec.get("segments_insufficient_evidence", []),
         "assumptions": list(s.get("identifying_assumptions", [])),
         "limitations": list(s.get("limitations", [])),
     }

@@ -25,7 +25,7 @@
     "Static contribution analysis: acquisition, retention and long-run LTV effects are not modelled and would need a longitudinal design.",
     "The estimand is the effect of promo uptake, not of being offered the promo; identifying the offer effect would need randomised encouragement or an instrument for uptake."
   ],
-  "estimand_note": "Propensity score matching targets the ATT -- the effect among customers who actually used the promo. Every other estimator targets the ATE, the effect if the promo were extended to everyone. Trimming and matching also change which customers an estimate refers to, which is recorded per estimator in target_population. These are different questions and their answers should not be compared as if they were the same number.",
+  "estimand_note": "Propensity score matching targets the ATT -- the effect among customers who actually used the promo. Every other estimator targets the ATE, the effect if the promo were extended to everyone. Trimming and matching also change which customers an estimate refers to, which is recorded per estimator in target_population. These are different questions and their answers should not be compared as if they were the same number. The OLS figure is the adjusted treatment coefficient from a model with no treatment-covariate interactions; because the effect is heterogeneous, that coefficient is not guaranteed to equal the population ATE.",
   "propensity_models": {
     "logistic": {
       "used_by": [
@@ -164,21 +164,71 @@
       "verdict": "evidence suggests this segment destroys contribution"
     }
   ],
+  "policy_economics": {
+    "n_eligible_customers": 50000,
+    "blanket_offer": {
+      "segments": [
+        "low spend",
+        "mid spend",
+        "high spend"
+      ],
+      "n_targeted": 50000,
+      "total_contribution": -9174.64,
+      "per_eligible_customer": -0.1835,
+      "per_targeted_customer": -0.1835,
+      "total_contribution_ci": [
+        -17357.42,
+        4671.53
+      ],
+      "per_eligible_customer_ci": [
+        -0.3471,
+        0.0934
+      ],
+      "per_targeted_customer_ci": [
+        -0.3471,
+        0.0934
+      ]
+    },
+    "targeted_offer": {
+      "segments": [
+        "low spend",
+        "mid spend"
+      ],
+      "n_targeted": 33332,
+      "total_contribution": 25661.48,
+      "per_eligible_customer": 0.5132,
+      "per_targeted_customer": 0.7699,
+      "total_contribution_ci": [
+        20400.17,
+        31315.85
+      ],
+      "per_eligible_customer_ci": [
+        0.408,
+        0.6263
+      ],
+      "per_targeted_customer_ci": [
+        0.612,
+        0.9395
+      ]
+    },
+    "difference_total_contribution": 34836.12,
+    "basis_note": "Both policies use the same formula, sum over segments of N_s * C_s, and the same eligible-customer denominator. Intervals come from the joint contribution draws summed per replicate, with the policy segment set held fixed at the final rule."
+  },
   "recommendation": {
-    "decision": "Target the promotion at: low spend, mid spend. Withhold it from: high spend.",
+    "decision": "Incremental economics are positive among: low spend, mid spend. Negative among: high spend. These are the effects of promo uptake, not of offering the promo \u2014 the positive segments are the strongest candidates for a targeted-offer experiment, not a directly identified offer effect.",
     "verdicts": {
       "low spend": "evidence supports targeting",
       "mid spend": "evidence supports targeting",
       "high spend": "evidence suggests this segment destroys contribution"
     },
-    "segments_evidence_supports_targeting": [
+    "segments_positive_economics": [
       "low spend",
       "mid spend"
     ],
-    "segments_evidence_says_destroy_contribution": [
+    "segments_negative_economics": [
       "high spend"
     ],
-    "segments_economically_uncertain": [],
+    "segments_insufficient_evidence": [],
     "decision_rule": "Interval-based: a segment is recommended only if the whole 95% contribution interval lies above zero, withheld only if it lies entirely below zero, and otherwise reported as economically uncertain. A positive point estimate whose interval spans zero is not evidence that the segment pays.",
     "profitable_segments": [
       "low spend",

@@ -247,8 +247,14 @@ def segment_contribution_bootstrap(
     shipping_cost_per_order: float,
     n_boot: int = 50,
     seed: int = 0,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, dict[str, np.ndarray]]:
     """Joint bootstrap of the whole contribution chain, per segment.
+
+    Returns (summary_frame, net_draws). The raw per-segment contribution draws
+    are returned because policy-level aggregates -- total dollars across a set
+    of segments -- must be summed PER DRAW and then have percentiles taken.
+    Combining separately-summarised segment intervals would repeat the mistake
+    this joint bootstrap exists to avoid, one level up.
 
     The contribution depends on TWO estimated quantities -- the revenue ATE and
     the causal purchase probability -- and both carry sampling uncertainty.
@@ -271,6 +277,7 @@ def segment_contribution_bootstrap(
 
     rng = np.random.default_rng(seed)
     rows = []
+    all_draws: dict[str, np.ndarray] = {}
 
     for k, label in enumerate(labels):
         m = segment == k
@@ -337,8 +344,9 @@ def segment_contribution_bootstrap(
             "sd_net_if_independent": sd_if_independent,
             "n_draws": len(net_draws),
         })
+        all_draws[label] = np.asarray(net_draws, dtype=float)
 
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows), all_draws
 
 
 def unmeasured_confounding_stress_test(

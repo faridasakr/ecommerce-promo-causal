@@ -14,7 +14,20 @@
 | Mid spend | $7.12 | $3.21 | −$2.95 | **+$0.25** | [+0.03, +0.51] | ✅ evidence supports targeting |
 | High spend | $4.01 | $1.81 | −$3.89 | **−$2.09** | [−2.49, −1.40] | ❌ evidence suggests this segment destroys contribution |
 
-**Recommendation: target the promotion at low-spend and mid-spend customers, and withhold it from high-spend. Mid-spend clears break-even by only three cents at the lower bound, and its verdict is hostage to the cost assumptions rather than to the statistics — see below before acting on it.**
+**Low- and mid-spend customers show positive incremental economics under the stated assumptions, making them the strongest candidates for a targeted-offer experiment; high-spend shows negative economics. Mid-spend clears break-even by only three cents at the lower bound, and its verdict is hostage to the cost assumptions rather than to the statistics — see below before acting on it.**
+
+**These are effects of promo *uptake*, not of *offering* the promo.** The treatment here is whether a customer used free shipping, so every figure describes customers who took it up. The policy question — whom to offer it to — is an intention-to-treat quantity this observational design does not identify, and which is generally smaller. Read the segment results as evidence about where an offer experiment is most likely to pay, not as a directly identified offer effect.
+
+**What the policy is worth, in dollars.** Per-customer contribution is not the decision-relevant number on its own — segments differ in size, so the policy total is what matters:
+
+| Policy | Segments offered | n offered | **Total contribution** | 95% CI | Per eligible customer | Per targeted customer |
+|---|---|---:|---:|---:|---:|---:|
+| Blanket | all three | 50,000 | **−$9,175** | [−17,357, +4,672] | −$0.18 | −$0.18 |
+| Targeted | low + mid spend | 33,332 | **+$25,662** | [+20,400, +31,316] | +$0.51 | +$0.77 |
+
+**The blanket offer is net negative, and its interval spans zero.** High-spend holds a third of the customers and destroys $2.09 each, which is enough to swamp the gains elsewhere — so offering to everyone is not merely worse than targeting, it is indistinguishable from value-destroying. Targeting is clearly positive. That comparison is only visible on a weighted basis; per-customer averages across segments hide it.
+
+Both rows use the identical formula — Σ over segments of *N·C* — and the same eligible-customer denominator, so they are comparable. An earlier version compared an unweighted mean across all segments against an unweighted mean of the profitable ones; those are different bases, and the mismatch flattered targeting twice over, ignoring segment sizes and silently redefining "per customer" between the two policies. Intervals come from the joint contribution draws summed **per replicate**, with the policy segment set held fixed at the final rule — re-selecting segments inside each draw would fold policy-selection uncertainty into the answer, which is a different question.
 
 **The verdict column is a rule, not a judgement call.** It reads the contribution interval, not the point estimate:
 
@@ -83,8 +96,8 @@ So the pipeline separates segments when effect modification is planted and decli
 
 | Estimator | Target estimand | Target population | Estimate | 95% CI | True value | Error |
 |---|---|---|---:|---:|---:|---:|
-| Naive difference in means | ATE | full sample | $23.03 | [22.40, 23.57] | — | — |
-| OLS regression adjustment | ATE | full sample | $7.09 | [6.60, 7.73] | $5.87 | +21% |
+| Naive difference in means | descriptive difference in means — non-causal | full sample | $23.03 | [22.40, 23.57] | — | — |
+| OLS adjusted treatment coefficient | ATE | full sample | $7.09 | [6.60, 7.73] | $5.87 | +21% |
 | Propensity score matching | **ATT** | **matched treated** | $7.08 | — | **$5.98** | +18% |
 | IPW (stabilised) | ATE | trimmed (logistic) | $6.38 | [5.68, 7.27] | $5.87 | +9% |
 | **AIPW (cross-fitted, doubly robust)** | ATE | trimmed (cross-fit) | **$6.42** | [5.98, 7.16] | $5.87 | +9% |
@@ -92,6 +105,8 @@ So the pipeline separates segments when effect modification is planted and decli
 **PSM has no confidence interval on purpose.** The ordinary nonparametric bootstrap is *invalid* for nearest-neighbour matching with a fixed number of matches — Abadie & Imbens (2008), "On the Failure of the Bootstrap for Matching Estimators". The estimator is not smooth enough for the bootstrap to be consistent, and the failure is asymptotic: more replicates do not fix it. Reporting an interval anyway would look like quantified uncertainty while resting on nothing, which is worse than reporting none. The point estimate stays — matching is still a useful classical baseline — and the interval is simply withheld with the reason attached.
 
 The **estimated causal effect** is **$6.42 per customer** (95% CI $5.98–$7.16), under conditional exchangeability, positivity, and SUTVA. Because this is synthetic data, the planted truth is known to be **$5.87** — on real data that column would not exist, which is precisely why the diagnostics and stated assumptions carry the weight.
+
+**On the OLS row:** it is the adjusted treatment coefficient from `Y ~ T + X` with no treatment-covariate interactions. Because the effect is heterogeneous under this DGP, that coefficient is a weighted average of segment effects and is not guaranteed to equal the population ATE. The model is deliberately left unexpanded — it is the plain-vanilla adjustment most analyses actually run, and its gap from the ATE is part of what the comparison shows.
 
 **On the naive row:** it has no true value because it is not estimating one. A difference between two self-selected groups is a description of who opted in, not an attempt at a causal quantity. Scoring it against the ATE would imply it was aiming at the ATE and missing, when the honest statement is that it targets nothing causal at all. Its $23.03 is still the number most analyses would report, which is the point of showing it.
 
@@ -161,15 +176,23 @@ data/raw/customers.csv
         ▼
    estimators.py
         │  naive → OLS → PSM(ATT) → IPW → AIPW(cross-fitted)
-        │  each with bootstrap CIs and a declared target estimand
+        │  each with a declared target estimand; bootstrap CIs where the
+        │  bootstrap is valid
         ▼
-   economics.py ──► margin × revenue − shipping subsidy = contribution by segment
-        │
+   diagnostics.py ─┬─ heterogeneity by spend (prespecified modifier)
+        │           ├─ heterogeneity by region (negative control)
+        │           ├─ causal incidence P(purchase | do(T=1)) per segment
+        │           └─ joint bootstrap: ATE → incidence → contribution
         ▼
-   results/summary.json
-        │
+   economics.py ──► margin × revenue − shipping subsidy = contribution
+        │           interval-based verdict → policy economics (total dollars)
         ▼
-    explain.py ──► LLM stakeholder layer (3 layers: prompt, schema, regex)
+   results/stakeholder_summary.json     results/evaluation_summary.json
+        │            (no ground truth)          (truth + scoring)
+        ▼                                             │
+    explain.py ──► LLM layer (prompt → schema → regex)│
+                                                      ▼
+                                        estimator-comparison tab only
 ```
 
 **Two propensity models, diagnosed separately.** IPW and PSM use a logistic model; AIPW uses cross-fitted gradient boosting. They are reported side by side in `results/propensity.json` so a clean balance table from one model cannot vouch for an estimate produced by the other. Balance is computed on the *trimmed* population, using the same weights the estimator applies — reporting balance on the full sample while estimating on a trimmed one describes two different populations.
@@ -194,9 +217,9 @@ data/raw/customers.csv
 **Cost:** Drops ~0.24% of the sample and changes the estimand to the trimmed population.
 **Conclusion:** Deploy, and state the estimand change rather than hiding it.
 
-**Decision:** The LLM never sees raw data, only `results/summary.json`.
+**Decision:** The LLM never sees raw data or ground truth — only `results/stakeholder_summary.json`, and it must fill a validated schema.
 **Alternatives:** Give the model table access and let it analyse.
-**Evidence:** Handed the raw table, an LLM will reproduce the naive $23 difference — the exact error this project exists to prevent. Statistical reasoning belongs in tested Python.
+**Evidence:** Handed the raw table, an LLM will reproduce the naive $23 difference — the exact error this project exists to prevent. Handed the answer key, it quotes a planted number that on real data does not exist. And prose alone cannot be checked, so the load-bearing claims move into schema fields that are compared to the analysis before anything renders.
 **Cost:** The assistant cannot answer questions outside the precomputed summary.
 **Conclusion:** That constraint is a feature; the model is instructed to refuse those questions.
 
@@ -204,7 +227,7 @@ data/raw/customers.csv
 **Alternatives:** Report the effect size and let stakeholders do the economics.
 **Evidence:** The revenue ranking (low > mid > high) and the profit ranking are *not* the same decision — mid-spend is revenue-positive and contribution-negative, because subsidy scales with order frequency rather than basket size.
 **Cost:** Requires margin and shipping-cost assumptions, which are declared and reported with break-even thresholds so they can be challenged.
-**Conclusion:** Ship it. "The effect is $6.42" is a finding; "target low-spend only" is a decision.
+**Conclusion:** Ship it. "The uptake effect is $6.42" is a finding; "these segments are the strongest candidates for a targeted-offer experiment" is a decision.
 
 ## Error taxonomy
 
@@ -214,7 +237,9 @@ In this realization, 2 of the 3 nominal 95% intervals did not contain their targ
 Estimation error
 ├── selection bias, unadjusted            +$17.17  (naive estimator)
 ├── residual bias after adjustment         +$0.51 to +$1.22
-│   └── driven by unmodelled effect heterogeneity in the propensity model
+│   └── may reflect finite-sample variation and/or nuisance-model
+│       misspecification; their contributions are not separately
+│       identified from this realization
 ├── intervals missing their target          2 of 3 in this realization
 │   └── incl. AIPW: 9% point error, yet its interval misses
 │   └── bootstrap CIs capture sampling noise, not model bias  ← see "the lesson"
@@ -277,4 +302,4 @@ Set `ANTHROPIC_API_KEY` to enable the live LLM explanation layer; without it, `e
 
 27 tests across two tiers — fast unit/property tests on an 8k fixture, plus full-data integration tests (`-m slow`) with a tighter 15% tolerance.
 
-Coverage includes: deterministic generation; confounding is genuinely strong (max |SMD| > 0.3); the naive estimator *is* badly biased; IPW/AIPW recover the planted effect; AIPW is reproducible at a fixed seed; propensity scores contain no NaN/degenerate values; post-trim weights stay bounded; all SMDs pass after weighting; both propensity models are diagnosed; cleaning handles currency/duplicates/missingness without mutating the caller's frame; the economics layer flags loss-making segments and reports break-evens; both guardrails fire correctly and don't false-positive; the system prompt retains its refusal and CI rules; and no analysis module reads the answer key.
+Coverage includes: deterministic generation; confounding is genuinely strong (max |SMD| > 0.3); the naive estimator *is* badly biased; IPW/AIPW recover the planted effect; AIPW is reproducible at a fixed seed; propensity scores contain no NaN/degenerate values; post-trim weights stay bounded; all SMDs pass after weighting; both propensity models are diagnosed; cleaning handles currency/duplicates/missingness without mutating the caller's frame; the economics layer assigns interval-based verdicts and reports break-evens; both guardrails fire correctly and don't false-positive; the system prompt retains its refusal and CI rules; and no analysis module reads the answer key.

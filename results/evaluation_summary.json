@@ -5,7 +5,7 @@
   "estimates": [
     {
       "estimator": "Naive difference in means",
-      "target_estimand": "ATE",
+      "target_estimand": "descriptive difference in means \u2014 non-causal",
       "target_population": "full sample",
       "n_target": 50000,
       "estimate": 23.033,
@@ -18,7 +18,7 @@
       "ci_covers_truth": null
     },
     {
-      "estimator": "OLS regression adjustment",
+      "estimator": "OLS adjusted treatment coefficient",
       "target_estimand": "ATE",
       "target_population": "full sample",
       "n_target": 50000,

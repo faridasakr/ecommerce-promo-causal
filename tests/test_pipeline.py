@@ -104,10 +104,14 @@ def test_aipw_is_deterministic_at_fixed_seed(data):
 def test_psm_targets_att_not_ate(data):
     """PSM is scored against the ATT. Guard the labelling that makes that true."""
     assert estimators.ESTIMANDS["Propensity score matching"] == "ATT"
+    # The naive contrast is not an ATE estimator and must not be labelled one:
+    # it is a descriptive difference between self-selected groups.
+    assert "non-causal" in estimators.ESTIMANDS["Naive difference in means"]
+    assert "ATE" not in estimators.ESTIMANDS["Naive difference in means"]
     assert all(
         estimators.ESTIMANDS[n] == "ATE"
         for n in estimators.ESTIMATORS
-        if n != "Propensity score matching"
+        if n not in ("Propensity score matching", "Naive difference in means")
     )
     X, t, y, names, truth = data
     assert "true_att" in truth and truth["true_att"] != truth["true_ate"]
@@ -322,7 +326,7 @@ def test_joint_bootstrap_reflects_both_sources_of_uncertainty(data):
     segment = np.zeros(len(y), dtype=int)  # single segment: whole fixture
     a = economics.CostAssumptions()
 
-    boot = diagnostics.segment_contribution_bootstrap(
+    boot, _draws = diagnostics.segment_contribution_bootstrap(
         X, t, y, purchased, segment, ["all"],
         gross_margin=a.gross_margin,
         shipping_cost_per_order=a.shipping_cost_per_order,
@@ -384,10 +388,10 @@ def test_positive_point_estimate_spanning_zero_is_not_a_recommendation():
     assert row["verdict"] == economics.VERDICT_UNCERTAIN
 
     rec = economics.recommendation(econ)
-    assert rec["segments_evidence_supports_targeting"] == []
-    assert rec["segments_economically_uncertain"] == ["mid spend"]
-    assert "controlled test" in rec["decision"]
-    assert "Target the promotion at" not in rec["decision"], (
+    assert rec["segments_positive_economics"] == []
+    assert rec["segments_insufficient_evidence"] == ["mid spend"]
+    assert "Insufficient evidence for" in rec["decision"]
+    assert "Incremental economics are positive among" not in rec["decision"], (
         "a segment whose interval spans zero must not be recommended for "
         "targeting just because its point estimate is positive"
     )
@@ -414,9 +418,9 @@ def test_decision_string_covers_all_three_verdicts():
     assert verdicts["high spend"] == economics.VERDICT_DESTROYS
 
     rec = economics.recommendation(econ)
-    assert "Target the promotion at: low spend." in rec["decision"]
-    assert "Withhold it from: high spend." in rec["decision"]
-    assert "controlled test before deciding on: mid spend." in rec["decision"]
+    assert "Incremental economics are positive among: low spend." in rec["decision"]
+    assert "Negative among: high spend." in rec["decision"]
+    assert "Insufficient evidence for: mid spend." in rec["decision"]
     assert rec["verdicts"] == verdicts
 
     # Targeted-offer economics must count only evidence-supported segments.
@@ -449,6 +453,68 @@ def test_segment_bootstrap_uses_full_count_for_final_runs(n_boot, expected):
     import run_analysis
 
     assert run_analysis.segment_boot(n_boot) == expected
+
+
+def test_policy_economics_uses_identical_weighted_denominators():
+    """Blanket and targeted must be computed the same way, weighted by size.
+
+    The previous version compared an unweighted mean over all segments against
+    an unweighted mean over the profitable ones — different bases, which
+    flattered targeting. This pins the arithmetic with segment sizes chosen so
+    an unweighted mean would give a visibly different answer.
+    """
+    econ = pd.DataFrame({
+        "segment": ["low spend", "mid spend", "high spend"],
+        "net_contribution": [1.00, 0.20, -2.00],
+    })
+    counts = {"low spend": 1_000, "mid spend": 1_000, "high spend": 8_000}
+    pol = economics.policy_economics(econ, counts, ["low spend", "mid spend"])
+
+    b, tg = pol["blanket_offer"], pol["targeted_offer"]
+    assert pol["n_eligible_customers"] == 10_000
+
+    # blanket = 1000*1.00 + 1000*0.20 + 8000*(-2.00) = -14,800
+    assert b["total_contribution"] == pytest.approx(-14_800.0, abs=0.01)
+    assert b["n_targeted"] == 10_000
+    # targeted = 1000*1.00 + 1000*0.20 = 1,200
+    assert tg["total_contribution"] == pytest.approx(1_200.0, abs=0.01)
+    assert tg["n_targeted"] == 2_000
+
+    # Per-eligible uses the SAME denominator for both -- that is what makes the
+    # two policies comparable at all.
+    assert b["per_eligible_customer"] == pytest.approx(-1.48, abs=0.001)
+    assert tg["per_eligible_customer"] == pytest.approx(0.12, abs=0.001)
+    # Per-targeted differs by construction; that is the point of targeting.
+    assert tg["per_targeted_customer"] == pytest.approx(0.60, abs=0.001)
+
+    # The unweighted mean the old code used would have said -0.267 for blanket.
+    # If that value reappears, the denominators have regressed.
+    assert b["per_eligible_customer"] != pytest.approx(-0.267, abs=0.01)
+
+
+def test_policy_intervals_hold_the_segment_set_fixed():
+    """Policy intervals must sum draws per replicate over a FIXED segment set.
+
+    Re-selecting segments per draw would fold policy-selection uncertainty into
+    the interval, which is a different question from how uncertain THIS
+    policy's value is.
+    """
+    econ = pd.DataFrame({
+        "segment": ["a", "b"],
+        "net_contribution": [1.0, -1.0],
+    })
+    counts = {"a": 100, "b": 100}
+    draws = {"a": np.array([0.5, 1.0, 1.5]), "b": np.array([-1.5, -1.0, -0.5])}
+
+    pol = economics.policy_economics(econ, counts, ["a"], net_draws=draws)
+    tg = pol["targeted_offer"]
+    # Only segment "a" is in the policy: 100 * [0.5, 1.0, 1.5] = [50, 100, 150]
+    lo, hi = tg["total_contribution_ci"]
+    assert lo == pytest.approx(52.5, abs=0.1) and hi == pytest.approx(147.5, abs=0.1)
+
+    # Blanket sums BOTH per draw: 100*(0.5-1.5), 100*(1.0-1.0), 100*(1.5-0.5)
+    blo, bhi = pol["blanket_offer"]["total_contribution_ci"]
+    assert blo == pytest.approx(-95.0, abs=0.1) and bhi == pytest.approx(95.0, abs=0.1)
 
 
 def test_economics_reports_breakeven_and_caveats():
@@ -600,9 +666,9 @@ def test_structured_answer_passes_when_fields_match(stakeholder_summary):
     [
         ("headline_estimate", 6.40, "headline_estimate"),
         ("ci", [5.00, 7.16], "ci[0]"),
-        ("segments_to_target", ["high spend"], "segments_to_target"),
-        ("segments_to_withhold", [], "segments_to_withhold"),
-        ("segments_uncertain", ["low spend"], "segments_uncertain"),
+        ("segments_positive_economics", ["high spend"], "segments_positive_economics"),
+        ("segments_negative_economics", [], "segments_negative_economics"),
+        ("segments_insufficient_evidence", ["low spend"], "segments_insufficient_evidence"),
         ("assumptions", ["The promo definitely worked."], "assumptions"),
         ("limitations", ["None worth mentioning."], "limitations"),
     ],

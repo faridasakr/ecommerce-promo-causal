@@ -42,7 +42,7 @@ class Estimate:
             if np.isfinite(self.ci_low)
             else "        --        "
         )
-        return f"{self.name:<34} {self.estimand:<4} {self.ate:7.2f}  {ci}"
+        return f"{self.name:<36} {self.estimand:<44} {self.ate:7.2f}  {ci}"
 
 
 # ---------------------------------------------------------------------------
@@ -253,7 +253,7 @@ def aipw_arm_means(X, t, y, seed: int = 0, n_folds: int = 2) -> tuple[float, flo
 
 ESTIMATORS = {
     "Naive difference in means": naive_difference,
-    "OLS regression adjustment": ols_adjustment,
+    "OLS adjusted treatment coefficient": ols_adjustment,
     "Propensity score matching": psm_matching,
     "IPW (stabilised)": ipw,
     "AIPW (cross-fitted, doubly robust)": aipw,
@@ -262,8 +262,8 @@ ESTIMATORS = {
 # Which quantity each estimator actually targets. Scored against the matching
 # ground-truth key, so the comparison table is apples-to-apples.
 ESTIMANDS = {
-    "Naive difference in means": "ATE",
-    "OLS regression adjustment": "ATE",
+    "Naive difference in means": "descriptive difference in means — non-causal",
+    "OLS adjusted treatment coefficient": "ATE",
     "Propensity score matching": "ATT",
     "IPW (stabilised)": "ATE",
     "AIPW (cross-fitted, doubly robust)": "ATE",

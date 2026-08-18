@@ -164,7 +164,7 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
     # both and they are correlated. Scales with --boot; this is the slow step.
     n_boot_contrib = segment_boot(n_boot)
     print(f"  joint bootstrap of the contribution chain (n={n_boot_contrib}) …")
-    contrib_boot = diagnostics.segment_contribution_bootstrap(
+    contrib_boot, net_draws = diagnostics.segment_contribution_bootstrap(
         X, t, y, purchased, segment, SEGMENTS,
         gross_margin=assumptions.gross_margin,
         shipping_cost_per_order=assumptions.shipping_cost_per_order,
@@ -194,6 +194,24 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
         # The verdict is emitted verbatim -- never paraphrased per surface.
         print(f"  {'':<12} -> {r['verdict']}")
     rec = economics.recommendation(econ, assumptions)
+
+    # Policy value on identical denominators for both policies, with the
+    # segment set held fixed at the final rule.
+    policy = economics.policy_economics(
+        econ,
+        segment_counts=dict(zip(hte["segment"], hte["n"])),
+        policy_segments=rec["segments_positive_economics"],
+        net_draws=net_draws,
+    )
+    b, tg = policy["blanket_offer"], policy["targeted_offer"]
+    print(f"\n  Policy value over {policy['n_eligible_customers']:,} eligible customers:")
+    for name, blk in (("blanket", b), ("targeted", tg)):
+        ci = blk.get("total_contribution_ci")
+        ci_s = f" [{ci[0]:,.0f}, {ci[1]:,.0f}]" if ci else ""
+        print(f"    {name:<9} total ${blk['total_contribution']:>12,.0f}{ci_s}"
+              f"   per eligible ${blk['per_eligible_customer']:>6.3f}"
+              f"   per targeted ${blk['per_targeted_customer']:>6.3f}"
+              f"   (n={blk['n_targeted']:,})")
     print(f"\n  >>> {rec['decision']}")
 
     # --------------------------------------------------------- 6. stress test
@@ -219,14 +237,14 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
     # full-population number.
     full = np.ones(len(t), dtype=bool)
     masks = {
-        "OLS regression adjustment": full,
+        "OLS adjusted treatment coefficient": full,
         "IPW (stabilised)": estimators.ipw_trim_mask(X, t, seed=seed),
         "AIPW (cross-fitted, doubly robust)": estimators.aipw_trim_mask(X, t, seed=seed),
         "Propensity score matching": estimators.psm_matched_treated(X, t, y, seed=seed),
     }
     populations = {
         "Naive difference in means": "full sample",
-        "OLS regression adjustment": "full sample",
+        "OLS adjusted treatment coefficient": "full sample",
         "Propensity score matching": "matched treated",
         "IPW (stabilised)": "trimmed (logistic)",
         "AIPW (cross-fitted, doubly robust)": "trimmed (cross-fit)",
@@ -329,7 +347,11 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
             "everyone. Trimming and matching also change which customers an "
             "estimate refers to, which is recorded per estimator in "
             "target_population. These are different questions and their "
-            "answers should not be compared as if they were the same number."
+            "answers should not be compared as if they were the same number. "
+            "The OLS figure is the adjusted treatment coefficient from a "
+            "model with no treatment-covariate interactions; because the "
+            "effect is heterogeneous, that coefficient is not guaranteed to "
+            "equal the population ATE."
         ),
         "propensity_models": {
             "logistic": {
@@ -360,6 +382,7 @@ def main(n_boot: int = 200, seed: int = 0) -> None:
             "not manufacture segment differences."
         ),
         "economics": econ.replace({np.nan: None}).to_dict(orient="records"),
+        "policy_economics": policy,
         "recommendation": rec,
         "stress_test": stress.to_dict(orient="records"),
         "stress_test_caveat": (

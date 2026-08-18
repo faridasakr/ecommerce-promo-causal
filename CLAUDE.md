@@ -30,7 +30,7 @@ src/generate_data.py   potential-outcomes DGP; writes the answer key
 src/prepare.py         cleaning + design matrix
 src/estimators.py      naive, OLS, PSM(ATT), IPW, AIPW(cross-fitted) + bootstrap
 src/diagnostics.py     balance, overlap, dual propensity report, stress test
-src/economics.py       contribution margin -> targeting decision
+src/economics.py       contribution margin -> verdicts -> policy economics
 src/run_analysis.py    orchestrates everything, writes results/, scores vs truth
 src/explain.py         LLM stakeholder layer + 3 guardrails
 app/main.py            Streamlit demo (5 tabs)
@@ -77,11 +77,13 @@ If a change moves these materially, investigate before accepting:
 
 | Estimator | Estimand | Target population | n | Estimate | True |
 |---|---|---|---:|---:|---:|
-| Naive | ATE | full sample | 50,000 | 23.03 | — |
-| OLS | ATE | full sample | 50,000 | 7.09 | 5.867 |
+| Naive | descriptive, non-causal | full sample | 50,000 | 23.03 | — |
+| OLS coef | ATE* | full sample | 50,000 | 7.09 | 5.867 |
 | PSM | ATT | matched treated | 18,664 | 7.08 (no CI) | 5.980 |
 | IPW | ATE | trimmed (logistic) | 49,879 | 6.38 | 5.869 |
 | AIPW | ATE | trimmed (cross-fit) | 49,972 | 6.42 | 5.868 |
+
+*OLS is `Y ~ T + X` with no interactions; under heterogeneous effects its coefficient is not guaranteed to equal the population ATE. Not expanded on purpose.
 
 Each truth is the mean of `tau_individual.npy` over the units that estimator used, computed at scoring time. Naive has no causal target and is reported with a dash. The four targets differ only in the third decimal under this DGP — that is a property of the planted effects, not a reason to collapse them back into one column.
 
@@ -105,6 +107,6 @@ The two estimates correlate +0.87 / +0.66 / +0.43 (low/mid/high). Because contri
 
 All four columns are in contribution_bootstrap.csv, so the correction is checkable rather than asserted. Do not assume adding a second uncertainty source widens an interval — for a difference with correlated terms it narrows.
 
-Targeting is INTERVAL-based, not point-estimate based: `economics.verdict_from_interval` maps CI lower>0 -> "evidence supports targeting", upper<0 -> "evidence suggests this segment destroys contribution", spans 0 -> "economically uncertain; recommend a controlled test". `recommendation()` keys off that verdict; the `profitable` boolean is a point-estimate fact that is still reported but no longer drives the decision. The three strings are emitted VERBATIM in the README table, the app's decision tab, and summary.json — a test fails if the README paraphrases them.
+Targeting is INTERVAL-based, not point-estimate based: `economics.verdict_from_interval` maps CI lower>0 -> "evidence supports targeting", upper<0 -> "evidence suggests this segment destroys contribution", spans 0 -> "economically uncertain; recommend a controlled test". `recommendation()` keys off that verdict; the `profitable` boolean is a point-estimate fact that is still reported but no longer drives the decision. The three strings are emitted VERBATIM in the README table, the app's decision tab, and stakeholder_summary.json — a test fails if the README paraphrases them.
 
 All three segments currently have sign_is_certain=True. Mid-spend's crossing is stable, not bootstrap noise — across seeds 0/1/2 at 50 and 150 replicates the lower bound stays in [+0.03, +0.11] and never reaches zero; the 200-replicate final run gives +0.03. Estimating the tail better moved the bound TOWARD zero, so the margin is three cents, not six. But it clears break-even by cents: mid flips negative if shipping exceeds $7.06 (vs $6.50 assumed) or margin falls below 41.4% (vs 45%). Those are illustrative placeholders, so mid-spend is assumption-limited, not data-limited. Do not describe it as resolved without that caveat.

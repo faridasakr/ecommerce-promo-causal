@@ -80,7 +80,7 @@ st.caption(
 )
 
 tab1, tab2, tab5, tab3, tab4 = st.tabs(
-    ["Estimator comparison", "Who does it work for?", "Should we run it again?",
+    ["Estimator comparison", "Who does it work for?", "Does it pay for itself?",
      "Diagnostics", "Ask a question"]
 )
 
@@ -112,7 +112,7 @@ with tab2:
     st.bar_chart(hte.set_index("segment")["ate"])
     st.info(
         "Effect size alone does not justify a targeting decision — free shipping "
-        "costs money to provide. See the **Should we run it again?** tab, which "
+        "costs money to provide. See the **Does it pay for itself?** tab, which "
         "nets these figures against margin and shipping subsidy."
     )
 
@@ -137,15 +137,31 @@ with tab5:
 
     st.success(f"**Decision:** {rec['decision']}")
     st.caption(f"Decision rule — {rec['decision_rule']}")
+    pol = summary["policy_economics"]
+    b, tg = pol["blanket_offer"], pol["targeted_offer"]
     st.markdown(
-        f"Blanket offer nets **\\${rec['net_contribution_blanket_offer']:.2f}** "
-        f"per customer; targeting only the segments the evidence supports nets "
-        f"**\\${rec['net_contribution_targeted_offer']:.2f}**."
+        f"**Total expected incremental contribution** over "
+        f"{pol['n_eligible_customers']:,} eligible customers — blanket offer "
+        f"**\\${b['total_contribution']:,.0f}**, targeted offer "
+        f"**\\${tg['total_contribution']:,.0f}**."
     )
-    if rec["segments_economically_uncertain"]:
+    st.dataframe(pd.DataFrame([
+        {"policy": "blanket", "segments": ", ".join(b["segments"]),
+         "n offered": b["n_targeted"],
+         "total contribution": round(b["total_contribution"], 2),
+         "per eligible customer": b["per_eligible_customer"],
+         "per targeted customer": b["per_targeted_customer"]},
+        {"policy": "targeted", "segments": ", ".join(tg["segments"]),
+         "n offered": tg["n_targeted"],
+         "total contribution": round(tg["total_contribution"], 2),
+         "per eligible customer": tg["per_eligible_customer"],
+         "per targeted customer": tg["per_targeted_customer"]},
+    ]), width="stretch", hide_index=True)
+    st.caption(pol["basis_note"])
+    if rec["segments_insufficient_evidence"]:
         st.warning(
             "**Economically uncertain: "
-            f"{', '.join(rec['segments_economically_uncertain'])}.** The "
+            f"{', '.join(rec['segments_insufficient_evidence'])}.** The "
             "contribution interval spans zero, so the data does not establish "
             "the sign. A positive point estimate is not evidence the segment "
             "pays — the honest next step is a controlled test, not a rollout."

@@ -1,4 +1,4 @@
-"""Turn the causal estimate into a targeting decision.
+"""Turn the causal estimate into policy economics.
 
 An incremental-revenue number is not a recommendation. Free shipping costs money
 to provide, and revenue is not profit. The chain that actually answers "should we
@@ -15,8 +15,15 @@ incremental revenue and still lose money, because you paid shipping on every
 order including the ones that would have happened anyway.
 
 That last clause is the whole point. The naive analysis says the promo is
-enormously profitable. The causal analysis says it is marginal overall and
-negative for the customers you least want to subsidise.
+enormously profitable. The causal analysis says the incremental economics are
+modest where positive and clearly negative for the heaviest orderers.
+
+NOTE ON WHAT THIS IS ABOUT. The treatment is promo UPTAKE, so every figure here
+is the economics of customers who took the offer. It is not the economics of
+OFFERING the promo, which is an intention-to-treat quantity this observational
+design does not identify. Segments with positive incremental economics are
+candidates for a targeted-offer experiment, not a directly identified offer
+effect.
 
 All cost parameters are ASSUMPTIONS, declared here and surfaced in the output so
 a stakeholder can challenge them. Break-even thresholds are reported so the
@@ -197,6 +204,90 @@ def purchase_rates_by_segment(
     return rates
 
 
+def policy_economics(
+    econ: pd.DataFrame,
+    segment_counts: dict[str, int],
+    policy_segments: list[str],
+    net_draws: dict[str, np.ndarray] | None = None,
+) -> dict:
+    """Blanket vs targeted policy value, on identical denominators.
+
+    The previous version compared an unweighted mean across all segments
+    against an unweighted mean of the profitable ones. Those are different
+    bases, and the comparison flattered targeting twice over: it ignored how
+    many customers each segment holds, and it silently changed what "per
+    customer" meant between the two policies.
+
+    Everything here is built from one quantity, computed the same way for both:
+
+        total = sum over segments of  N_s * I_s * C_s
+
+    where I_s marks segment membership in the policy. Three figures follow:
+
+      total                        expected incremental contribution, dollars
+      per_eligible_customer        total / N over the whole analysed population
+      per_targeted_customer        total / N actually offered the promo
+
+    Per-eligible uses the same denominator for both policies, which is what
+    makes them comparable. Per-targeted differs by construction -- that is the
+    point of targeting, and reporting both stops either number standing alone.
+
+    Intervals come from the joint contribution draws, summed PER DRAW. The
+    policy segment set is held FIXED at the final rule rather than re-selected
+    within each replicate: re-selecting would fold policy-selection uncertainty
+    into the interval, which is a different question from "how uncertain is the
+    value of THIS policy".
+    """
+    counts = {s: int(segment_counts[s]) for s in econ["segment"]}
+    net = dict(zip(econ["segment"], econ["net_contribution"]))
+    n_eligible = sum(counts.values())
+
+    def value(segments: list[str]) -> dict:
+        n_targeted = sum(counts[s] for s in segments)
+        total = float(sum(counts[s] * net[s] for s in segments))
+        out = {
+            "segments": list(segments),
+            "n_targeted": n_targeted,
+            "total_contribution": round(total, 2),
+            "per_eligible_customer": round(total / n_eligible, 4) if n_eligible else 0.0,
+            "per_targeted_customer": round(total / n_targeted, 4) if n_targeted else 0.0,
+        }
+        if net_draws:
+            usable = [s for s in segments if len(net_draws.get(s, [])) > 0]
+            if usable and len(usable) == len(segments):
+                k = min(len(net_draws[s]) for s in usable)
+                totals = np.sum(
+                    [counts[s] * np.asarray(net_draws[s][:k]) for s in usable], axis=0
+                )
+                lo, hi = np.percentile(totals, [2.5, 97.5])
+                out["total_contribution_ci"] = [round(float(lo), 2), round(float(hi), 2)]
+                out["per_eligible_customer_ci"] = [
+                    round(float(lo) / n_eligible, 4), round(float(hi) / n_eligible, 4)
+                ]
+                out["per_targeted_customer_ci"] = [
+                    round(float(lo) / n_targeted, 4), round(float(hi) / n_targeted, 4)
+                ]
+        return out
+
+    blanket = value(list(econ["segment"]))
+    targeted = value([s for s in econ["segment"] if s in policy_segments])
+
+    return {
+        "n_eligible_customers": n_eligible,
+        "blanket_offer": blanket,
+        "targeted_offer": targeted,
+        "difference_total_contribution": round(
+            targeted["total_contribution"] - blanket["total_contribution"], 2
+        ),
+        "basis_note": (
+            "Both policies use the same formula, sum over segments of "
+            "N_s * C_s, and the same eligible-customer denominator. Intervals "
+            "come from the joint contribution draws summed per replicate, with "
+            "the policy segment set held fixed at the final rule."
+        ),
+    }
+
+
 def recommendation(econ: pd.DataFrame, assumptions: CostAssumptions | None = None) -> dict:
     """Convert the contribution table into a stated decision with caveats.
 
@@ -227,24 +318,32 @@ def recommendation(econ: pd.DataFrame, assumptions: CostAssumptions | None = Non
         else 0.0
     )
 
+    # The treatment is promo UPTAKE, so this cannot be phrased as an
+    # instruction to offer the promo -- that is a different, unidentified
+    # quantity. The closing clause is load-bearing and must stay in the
+    # artefact: the README is invisible to the model, so this string is the
+    # only place the distinction reaches the LLM layer.
     parts = []
     if target:
-        parts.append(f"Target the promotion at: {', '.join(target)}.")
+        parts.append(f"Incremental economics are positive among: {', '.join(target)}.")
     if destroys:
-        parts.append(f"Withhold it from: {', '.join(destroys)}.")
+        parts.append(f"Negative among: {', '.join(destroys)}.")
     if uncertain:
-        parts.append(
-            f"Run a controlled test before deciding on: {', '.join(uncertain)}."
-        )
-    if not parts:
-        parts.append("Do not re-run the promotion as structured.")
+        parts.append(f"Insufficient evidence for: {', '.join(uncertain)}.")
+    if not (target or destroys or uncertain):
+        parts.append("No segment shows positive incremental economics.")
+    parts.append(
+        "These are the effects of promo uptake, not of offering the promo — "
+        "the positive segments are the strongest candidates for a "
+        "targeted-offer experiment, not a directly identified offer effect."
+    )
 
     return {
         "decision": " ".join(parts),
         "verdicts": dict(zip(econ["segment"], econ["verdict"])),
-        "segments_evidence_supports_targeting": target,
-        "segments_evidence_says_destroy_contribution": destroys,
-        "segments_economically_uncertain": uncertain,
+        "segments_positive_economics": target,
+        "segments_negative_economics": destroys,
+        "segments_insufficient_evidence": uncertain,
         "decision_rule": (
             "Interval-based: a segment is recommended only if the whole 95% "
             "contribution interval lies above zero, withheld only if it lies "
